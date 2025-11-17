@@ -1,135 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seaview Marina Tide</title>
-  <style>
-    body {
-      font-family: 'Arial', sans-serif;
-      background: #f0f8ff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    h1 {
-      color: #0077be;
-      margin-bottom: 20px;
-    }
-    canvas {
-      max-width: 90%;
-      background: white;
-      padding: 10px;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Seaview Marina Tide Forecast</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #f0f8ff;
+    margin: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #004080;
+  }
+  #chartContainer {
+    width: 90%;
+    max-width: 900px;
+    margin: 30px auto;
+  }
+</style>
 </head>
 <body>
-  <h1>Seaview Marina Tide</h1>
+
+<h1>Seaview Marina Tide Forecast</h1>
+<div id="chartContainer">
   <canvas id="tideChart"></canvas>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const apiKey = "H5n5G0aycS3F4LgAVVzOkJD31AYPcvHR";
+const appId = "5f4b72b5-c07b-4c44-aacc-ac136b301d34";
+const latitude = -41.25;  
+const longitude = 174.902;
 
-  <script>
-    const apiKey = 'H5n5G0aycS3F4LgAVVzOkJD31AYPcvHR';
-    const appId = '5f4b72b5-c07b-4c44-aacc-ac136b301d34';
-    const stationId = 'SEAVIEW_MARINA_STATION_ID'; // replace with actual station ID
-    const url = `https://api.niwa.co.nz/tides/v1/stations/${stationId}/predictions?apikey=${apiKey}&period=31`;
+async function fetchTideData() {
+  const url = `https://api.niwa.co.nz/tides/v1/forecasts?lat=${latitude}&lon=${longitude}&appid=${appId}`;
+  const response = await fetch(url, {
+    headers: { "Authorization": `Bearer ${apiKey}` }
+  });
+  const data = await response.json();
+  return data.forecasts;
+}
 
-    let tideChart;
-    let tideData = [];
+function processData(forecasts) {
+  const labels = [];
+  const heights = [];
+  const now = new Date();
+  let currentIndex = 0;
 
-    async function fetchTideData() {
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
+  forecasts.forEach((f, i) => {
+    const t = new Date(f.time);
+    labels.push(t.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+    heights.push(f.height);
 
-        tideData = data.map(item => ({
-          time: new Date(item.time),
-          height: item.height
-        }));
+    if (t > now && currentIndex === 0) currentIndex = i;
+  });
 
-        createChart();
-        updateCurrentTide(); 
-        setInterval(updateCurrentTide, 60 * 1000); // update every minute
-      } catch (err) {
-        console.error('Error fetching tide data:', err);
-        alert('Failed to load tide data. Check API key or station ID.');
-      }
-    }
+  return { labels, heights, currentIndex };
+}
 
-    function createChart() {
-      const ctx = document.getElementById('tideChart').getContext('2d');
-      const labels = tideData.map(d => `${d.time.getDate()}/${d.time.getMonth()+1} ${d.time.getHours()}:00`);
-      const heights = tideData.map(d => d.height);
+function drawChart(labels, heights, currentIndex) {
+  const ctx = document.getElementById('tideChart').getContext('2d');
 
-      tideChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Tide Height (m)',
-              data: heights,
-              borderColor: '#0077be',
-              backgroundColor: 'rgba(0,119,190,0.2)',
-              fill: true,
-              tension: 0.3
-            }
-          ]
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Tide Height (m)',
+        data: heights,
+        fill: true,
+        borderColor: '#007bff',
+        backgroundColor: 'rgba(0, 123, 255, 0.2)',
+        tension: 0.3,
+        pointRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: 'Hourly Tide Predictions'
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          title: { display: true, text: 'Time' }
         },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: true },
-            tooltip: { mode: 'index', intersect: false }
-          },
-          interaction: { mode: 'nearest', intersect: false },
-          scales: {
-            x: {
-              display: true,
-              title: { display: true, text: 'Date / Hour' },
-              ticks: { maxRotation: 90, minRotation: 45 }
-            },
-            y: {
-              display: true,
-              title: { display: true, text: 'Height (m)' }
-            }
-          }
-        },
-        plugins: [{
-          id: 'currentTimeLine',
-          afterDraw: chart => {
-            const now = new Date();
-            const xScale = chart.scales.x;
-            const yScale = chart.scales.y;
-
-            const times = tideData.map(d => d.time.getTime());
-            const closestIndex = times.findIndex(t => t > now.getTime());
-            if (closestIndex > 0) {
-              const x = xScale.getPixelForValue(closestIndex);
-              const ctx = chart.ctx;
-              ctx.save();
-              ctx.strokeStyle = 'red';
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              ctx.moveTo(x, yScale.top);
-              ctx.lineTo(x, yScale.bottom);
-              ctx.stroke();
-              ctx.restore();
-            }
-          }
-        }]
-      });
+        y: {
+          display: true,
+          title: { display: true, text: 'Height (m)' },
+          suggestedMin: Math.min(...heights) - 0.5,
+          suggestedMax: Math.max(...heights) + 0.5
+        }
+      },
+      animation: false
     }
+  });
 
-    function updateCurrentTide() {
-      tideChart.update('none'); // redraw with vertical line
-    }
+  // Add current time marker
+  const chart = Chart.getChart('tideChart');
+  const xPos = currentIndex;
+  if (xPos) {
+    const ctx2 = chart.ctx;
+    const xPixel = chart.scales.x.getPixelForValue(xPos);
+    ctx2.save();
+    ctx2.beginPath();
+    ctx2.moveTo(xPixel, chart.scales.y.top);
+    ctx2.lineTo(xPixel, chart.scales.y.bottom);
+    ctx2.strokeStyle = 'red';
+    ctx2.lineWidth = 2;
+    ctx2.stroke();
+    ctx2.restore();
+  }
+}
 
-    fetchTideData();
-  </script>
+async function init() {
+  const forecasts = await fetchTideData();
+  const { labels, heights, currentIndex } = processData(forecasts);
+  drawChart(labels, heights, currentIndex);
+}
+
+init();
+</script>
+
 </body>
 </html>
