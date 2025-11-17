@@ -1,133 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Seaview Marina Tide Forecast</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-  body {
-    font-family: sans-serif;
-    background: #f0f8ff;
-    margin: 20px;
-  }
-  h1 {
-    text-align: center;
-    color: #004080;
-  }
-  #chartContainer {
-    width: 90%;
-    max-width: 900px;
-    margin: 30px auto;
-  }
-</style>
-</head>
-<body>
-
-<h1>Seaview Marina Tide Forecast</h1>
-<div id="chartContainer">
-  <canvas id="tideChart"></canvas>
-</div>
-
 <script>
 const apiKey = "H5n5G0aycS3F4LgAVVzOkJD31AYPcvHR";
 const appId = "5f4b72b5-c07b-4c44-aacc-ac136b301d34";
-const stationId = "Wellington"; // replace with actual station
+const stationId = "Wellington"; // use valid station code
 const url = `https://api.niwa.co.nz/tides/v1/stations/${stationId}/forecasts?appid=${appId}`;
 
-
 async function fetchTideData() {
-  const url = `https://api.niwa.co.nz/tides/v1/forecasts?lat=${latitude}&lon=${longitude}&appid=${appId}`;
-  const response = await fetch(url, {
-    headers: { "Authorization": `Bearer ${apiKey}` }
-  });
-  const data = await response.json();
-  return data.forecasts;
-}
-
-function processData(forecasts) {
-  const labels = [];
-  const heights = [];
-  const now = new Date();
-  let currentIndex = 0;
-
-  forecasts.forEach((f, i) => {
-    const t = new Date(f.time);
-    labels.push(t.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-    heights.push(f.height);
-
-    if (t > now && currentIndex === 0) currentIndex = i;
-  });
-
-  return { labels, heights, currentIndex };
-}
-
-function drawChart(labels, heights, currentIndex) {
-  const ctx = document.getElementById('tideChart').getContext('2d');
-
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Tide Height (m)',
-        data: heights,
-        fill: true,
-        borderColor: '#007bff',
-        backgroundColor: 'rgba(0, 123, 255, 0.2)',
-        tension: 0.3,
-        pointRadius: 3
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Hourly Tide Predictions'
-        }
-      },
-      scales: {
-        x: {
-          display: true,
-          title: { display: true, text: 'Time' }
-        },
-        y: {
-          display: true,
-          title: { display: true, text: 'Height (m)' },
-          suggestedMin: Math.min(...heights) - 0.5,
-          suggestedMax: Math.max(...heights) + 0.5
-        }
-      },
-      animation: false
-    }
-  });
-
-  // Add current time marker
-  const chart = Chart.getChart('tideChart');
-  const xPos = currentIndex;
-  if (xPos) {
-    const ctx2 = chart.ctx;
-    const xPixel = chart.scales.x.getPixelForValue(xPos);
-    ctx2.save();
-    ctx2.beginPath();
-    ctx2.moveTo(xPixel, chart.scales.y.top);
-    ctx2.lineTo(xPixel, chart.scales.y.bottom);
-    ctx2.strokeStyle = 'red';
-    ctx2.lineWidth = 2;
-    ctx2.stroke();
-    ctx2.restore();
+  try {
+    const response = await fetch(url, {
+      headers: { "Authorization": `Bearer ${apiKey}` }
+    });
+    const data = await response.json();
+    return data.forecasts; // make sure 'forecasts' exists
+  } catch (err) {
+    console.error("Failed to fetch tide data:", err);
+    alert("Failed to load tide data. Check console.");
+    return [];
   }
 }
 
+// rest of your processData() and drawChart() functions remain the same
+
 async function init() {
   const forecasts = await fetchTideData();
+  if (forecasts.length === 0) return; // stop if no data
   const { labels, heights, currentIndex } = processData(forecasts);
   drawChart(labels, heights, currentIndex);
 }
 
 init();
 </script>
-
-</body>
-</html>
