@@ -29,25 +29,11 @@
 </div>
 
 <script>
-const apiKey = "H5n5G0aycS3F4LgAVVzOkJD31AYPcvHR";
-const appId = "5f4b72b5-c07b-4c44-aacc-ac136b301d34";
-const stationId = "Wellington"; // NIWA station code
-
-const url = `https://api.niwa.co.nz/tides/v1/stations/${stationId}/forecasts?appid=${appId}`;
-
+// Load tide data from local JSON
 async function fetchTideData() {
-  try {
-    const response = await fetch(url, {
-      headers: { "Authorization": `Bearer ${apiKey}` }
-    });
-    const data = await response.json();
-    if (!data.forecasts) throw new Error("No forecasts returned");
-    return data.forecasts;
-  } catch (err) {
-    console.error("Failed to fetch tide data:", err);
-    alert("Failed to load tide data. Check console.");
-    return [];
-  }
+  const response = await fetch('tides.json'); // Place tides.json in the same GitHub repo
+  const data = await response.json();
+  return data.forecasts; // Array of {time: "YYYY-MM-DDTHH:MM:SS", height: number}
 }
 
 function processData(forecasts) {
@@ -60,7 +46,6 @@ function processData(forecasts) {
     const t = new Date(f.time);
     labels.push(t.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
     heights.push(f.height);
-
     if (t > now && currentIndex === 0) currentIndex = i;
   });
 
@@ -102,24 +87,22 @@ function drawChart(labels, heights, currentIndex) {
     }
   });
 
-  // Add current time marker
-  if (currentIndex) {
-    const xPixel = tideChart.scales.x.getPixelForValue(currentIndex);
-    const ctx2 = tideChart.ctx;
-    ctx2.save();
-    ctx2.beginPath();
-    ctx2.moveTo(xPixel, tideChart.scales.y.top);
-    ctx2.lineTo(xPixel, tideChart.scales.y.bottom);
-    ctx2.strokeStyle = 'red';
-    ctx2.lineWidth = 2;
-    ctx2.stroke();
-    ctx2.restore();
-  }
+  // Draw current time marker
+  const chart = tideChart;
+  const ctx2 = chart.ctx;
+  const xPixel = chart.scales.x.getPixelForValue(currentIndex);
+  ctx2.save();
+  ctx2.beginPath();
+  ctx2.moveTo(xPixel, chart.scales.y.top);
+  ctx2.lineTo(xPixel, chart.scales.y.bottom);
+  ctx2.strokeStyle = 'red';
+  ctx2.lineWidth = 2;
+  ctx2.stroke();
+  ctx2.restore();
 }
 
 async function init() {
   const forecasts = await fetchTideData();
-  if (forecasts.length === 0) return;
   const { labels, heights, currentIndex } = processData(forecasts);
   drawChart(labels, heights, currentIndex);
 }
