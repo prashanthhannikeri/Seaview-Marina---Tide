@@ -31,8 +31,9 @@
 <script>
 const apiKey = "H5n5G0aycS3F4LgAVVzOkJD31AYPcvHR";
 const appId = "5f4b72b5-c07b-4c44-aacc-ac136b301d34";
-const latitude = -41.25;  
-const longitude = 174.902;
+const stationId = "Wellington - ferry building"; // replace with actual station
+const url = `https://api.niwa.co.nz/tides/v1/stations/${stationId}/forecasts?appid=${appId}`;
+
 
 async function fetchTideData() {
   const url = `https://api.niwa.co.nz/tides/v1/forecasts?lat=${latitude}&lon=${longitude}&appid=${appId}`;
