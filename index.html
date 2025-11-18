@@ -48,19 +48,20 @@ const tooltip = document.getElementById('lineTooltip');
 let markerTime = new Date();
 let isDragging = false;
 
-// Linear interpolation to get tide height at any time
+// Linear interpolation with slope
 function sampleAt(timeMs){
-  if(timeMs <= +dataPoints[0].x) return dataPoints[0];
-  if(timeMs >= +dataPoints[dataPoints.length-1].x) return dataPoints[dataPoints.length-1];
+  if(timeMs <= +dataPoints[0].x) return {x:dataPoints[0].x,y:dataPoints[0].y,slope:dataPoints[1].y-dataPoints[0].y};
+  if(timeMs >= +dataPoints[dataPoints.length-1].x) return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:dataPoints[dataPoints.length-1].y-dataPoints[dataPoints.length-2].y};
   for(let i=0;i<dataPoints.length-1;i++){
     const t0 = +dataPoints[i].x, t1 = +dataPoints[i+1].x;
     if(timeMs >= t0 && timeMs <= t1){
       const ratio = (timeMs-t0)/(t1-t0);
       const y = dataPoints[i].y + (dataPoints[i+1].y - dataPoints[i].y)*ratio;
-      return {x:new Date(timeMs),y};
+      const slope = (dataPoints[i+1].y - dataPoints[i].y)/((t1-t0)/3600000); // per hour
+      return {x:new Date(timeMs),y,slope};
     }
   }
-  return dataPoints[dataPoints.length-1];
+  return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:0};
 }
 
 // Vertical line plugin
@@ -79,15 +80,18 @@ const verticalLinePlugin = {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Draw circle at current height
+    // Circle at height
     const s = sampleAt(+markerTime);
     const y = yScale.getPixelForValue(s.y);
     ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
     ctx.restore();
 
-    // Update tooltip
+    // Tooltip with trend
+    let trend = 'Stable';
+    if(s.slope > 0.01) trend = 'Rising';
+    else if(s.slope < -0.01) trend = 'Falling';
     tooltip.style.display='block';
-    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m`;
+    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
     tooltip.style.left = x + chart.canvas.getBoundingClientRect().left - chart.canvas.offsetLeft + 'px';
     tooltip.style.top = y + chart.canvas.getBoundingClientRect().top - chart.canvas.offsetTop - 20 + 'px';
   }
