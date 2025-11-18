@@ -1,101 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Seaview Marina — Tide Forecast (NZ Tide style)</title>
-
-<!-- Chart.js + zoom plugin -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<meta charset="UTF-8">
+<title>Seaview Marina Tide Forecast</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-  :root { --bg: #f0f8ff; --blue: #007bff; --accent: #004080; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: var(--bg); margin: 18px; color: #04213a; }
-  h1 { text-align: center; color: var(--accent); margin-bottom: 6px; }
-  p.subtitle { text-align:center; margin-top:0; margin-bottom:18px; color:#2b4d66; }
-  #chartWrapper { width: 95%; max-width: 980px; margin: 0 auto; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 6px 18px rgba(2,20,40,0.06); }
-  canvas { width: 100% !important; height: 360px !important; display:block; }
-  #controls { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:10px; }
-  .btn { background: var(--blue); color: white; padding:6px 10px; border-radius:6px; border: none; cursor:pointer; }
-  .btn.secondary { background: #eee; color: #222; }
-  #tableContainer { width: 95%; max-width:980px; margin: 16px auto 60px; background:white; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(2,20,40,0.04); }
-  table { width:100%; border-collapse: collapse; font-size:14px; }
-  th, td { padding:8px 6px; text-align:left; border-bottom:1px solid #f0f4f8; }
-  th { color:#24425a; background:#fbfdff; position:sticky; top:0; z-index:2; }
-  .peak { color:#b84d00; font-weight:600; }
-  .trough { color:#004d99; font-weight:600; }
-
-  /* tooltip-like box for the cursor */
-  .cursor-tooltip {
-    position: absolute;
-    pointer-events: none;
-    background: white;
-    border-radius: 6px;
-    padding: 8px 10px;
-    box-shadow: 0 8px 20px rgba(10,20,40,0.12);
-    font-size:13px;
-    transform: translate(-50%, -120%);
-    white-space:nowrap;
-    border-left:4px solid var(--blue);
+  body { font-family: sans-serif; background: #f0f8ff; margin: 20px; }
+  h1 { text-align: center; color: #004080; }
+  #chartContainer { width: 90%; max-width: 900px; margin: 30px auto; }
+  #dragInfo {
+    text-align: center;
+    font-size: 18px;
+    margin-top: 10px;
+    color: #b30000;
+    font-weight: bold;
   }
-
-  /* floating height label above the centre line */
-  .height-label {
-    position:absolute;
-    transform: translate(-50%, -60%);
-    background: rgba(255,255,255,0.95);
-    border-radius:6px;
-    padding:4px 8px;
-    font-weight:700;
-    box-shadow: 0 6px 16px rgba(2,20,40,0.08);
-  }
-
-  /* small helper row */
-  .helper-row { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:8px; }
-  .note { color:#34556d; font-size:13px; }
 </style>
 </head>
 <body>
 
-<h1>Seaview Marina — Tide Forecast</h1>
-<p class="subtitle">Hourly prediction (24 hours) — drag to pan, scroll to zoom. The red vertical cursor stays centred.</p>
-
-<div id="chartWrapper">
-  <div style="position:relative;">
-    <canvas id="tideChart"></canvas>
-    <div id="cursorTooltip" class="cursor-tooltip" style="display:none;">Time · Height</div>
-    <div id="heightLabel" class="height-label" style="display:none;">0.00 m</div>
-  </div>
-
-  <div id="controls">
-    <div>
-      <button id="recenterBtn" class="btn">Re-centre to now</button>
-      <button id="toggleAutoBtn" class="btn secondary">Auto-centre: ON</button>
-    </div>
-    <div class="note">Pan: click-drag — Zoom: mouse wheel / pinch</div>
-  </div>
-
-  <div class="helper-row" style="margin-top:8px;">
-    <div><strong>Red cursor</strong>: fixed centre — move the data beneath it to inspect times.</div>
-    <div style="font-size:13px;color:#34556d;">Peaks = high tides, troughs = low tides</div>
-  </div>
+<h1>Seaview Marina Tide Forecast</h1>
+<div id="chartContainer">
+  <canvas id="tideChart"></canvas>
 </div>
-
-<div id="tableContainer">
-  <h3 style="margin:0 0 8px 0;">24-hour tide table</h3>
-  <div style="overflow:auto;">
-    <table id="tideTable">
-      <thead><tr><th>Time</th><th>Height (m)</th><th>Note</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</div>
+<div id="dragInfo"></div>
 
 <script>
-/* ===========================
-   1) Sample data: 24 hourly points
-   Replace this array with your API data (same format)
-   =========================== */
+// ------------------ SAMPLE 24-HOUR DATA ------------------
 const forecasts = [
   {"time":"2025-11-18T00:00:00","height":1.2},
   {"time":"2025-11-18T01:00:00","height":1.4},
@@ -123,310 +55,141 @@ const forecasts = [
   {"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
-/* ===========================
-   2) Global settings
-   =========================== */
-const autoCentreToNow = true;   // keep the true 'now' centred under cursor each minute
-const autoCentreIntervalMs = 60 * 1000; // 1 minute updates
-const visiblePointsAtStart = 8; // how many points visible left-to-right at load (approx)
+function processData(forecasts) {
+  const labels = [];
+  const heights = [];
+  const now = new Date();
+  let currentIndex = 0;
 
-/* ===========================
-   3) Prepare labels & dataset (category x scale)
-   We'll use a category x axis and compute numeric fractional index from pixel.
-   =========================== */
-const labels = forecasts.map(f => {
-  const d = new Date(f.time);
-  // British time formatting: 24-hour with leading zeros
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12:false });
-});
-const heights = forecasts.map(f => f.height);
+  forecasts.forEach((f, i) => {
+    const t = new Date(f.time);
+    labels.push(t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+    heights.push(f.height);
+    if (t > now && currentIndex === 0) currentIndex = i;
+  });
 
-// compute high/low indices
-function findPeaksTroughs(values) {
-  const peaks = [];
-  const troughs = [];
-  for (let i = 1; i < values.length - 1; i++) {
-    if (values[i] > values[i-1] && values[i] > values[i+1]) peaks.push(i);
-    if (values[i] < values[i-1] && values[i] < values[i+1]) troughs.push(i);
-  }
-  return { peaks, troughs };
+  return { labels, heights, currentIndex };
 }
-const { peaks, troughs } = findPeaksTroughs(heights);
 
-/* ===========================
-   4) Chart config
-   =========================== */
+const { labels, heights, currentIndex } = processData(forecasts);
+
+// -------- Create Chart --------
 const ctx = document.getElementById('tideChart').getContext('2d');
 
-const dataPoints = labels.map((lbl, i) => ({ x: lbl, y: heights[i] }));
-
-// configure dataset point styles to highlight peaks/troughs
-const pointBackgrounds = dataPoints.map((_, i) => {
-  if (peaks.includes(i)) return '#b84d00';
-  if (troughs.includes(i)) return '#004d99';
-  return 'rgba(0,0,0,0)';
-});
-const pointRadii = dataPoints.map((_, i) => peaks.includes(i) || troughs.includes(i) ? 5 : 0);
-
-const chart = new Chart(ctx, {
+const tideChart = new Chart(ctx, {
   type: 'line',
   data: {
     labels: labels,
     datasets: [{
       label: 'Tide Height (m)',
       data: heights,
-      fill: true,
       borderColor: '#007bff',
-      backgroundColor: 'rgba(0,123,255,0.12)',
-      tension: 0.25,
-      pointRadius: pointRadii,
-      pointHoverRadius: 6,
-      pointBackgroundColor: pointBackgrounds,
-      borderWidth: 2
+      backgroundColor: 'rgba(0,123,255,0.2)',
+      tension: 0.3,
+      fill: true,
+      pointRadius: 0
     }]
   },
   options: {
-    maintainAspectRatio: false,
-    animation: {
-      duration: 400,
-      easing: 'easeOutCubic'
+    responsive: true,
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        enabled: false  // We use our own custom tooltip
+      }
     },
     scales: {
-      x: {
-        type: 'category',
-        title: { display: true, text: 'Time' },
-        ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }
-      },
+      x: { title: { display: true, text: "Time" } },
       y: {
-        title: { display: true, text: 'Height (m)' },
+        title: { display: true, text: "Height (m)" },
         suggestedMin: Math.min(...heights) - 0.5,
         suggestedMax: Math.max(...heights) + 0.5
       }
     },
-    plugins: {
-      legend: { display: false },
-      // zoom plugin controls
-      zoom: {
-        pan: {
-          enabled: true,
-          mode: 'x',
-          modifierKey: null,
-          overScaleMode: 'x'
-        },
-        zoom: {
-          wheel: { enabled: true },
-          pinch: { enabled: true },
-          mode: 'x'
-        }
-      }
-    },
-    // custom option to control centre index (we will set/get this manually)
-    centreIndex: null,
-    responsive: true,
-    interaction: { mode: 'nearest', intersect: false }
-  },
-  plugins: [{
-    id: 'centreCursorPlugin',
-    afterDraw(chartInstance) {
-      const chartArea = chartInstance.chartArea;
-      if (!chartArea) return;
-
-      // centre X in pixels
-      const centerX = (chartArea.left + chartArea.right) / 2;
-      const ctx = chartInstance.ctx;
-
-      // draw vertical cursor line
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(centerX, chartArea.top);
-      ctx.lineTo(centerX, chartArea.bottom);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'red';
-      ctx.stroke();
-      ctx.restore();
-
-      // compute fractional index under cursor
-      const xScale = chartInstance.scales.x;
-      // get category index for pixel
-      const valueAtPixel = xScale.getValueForPixel(centerX); // returns fractional index
-      const fractionalIndex = valueAtPixel;
-      const leftIndex = Math.floor(fractionalIndex);
-      const rightIndex = Math.min(labels.length - 1, leftIndex + 1);
-      // linear interpolate Y between points
-      const leftY = heights[leftIndex];
-      const rightY = heights[rightIndex];
-      const t = fractionalIndex - leftIndex;
-      const interpY = (1 - t) * leftY + t * rightY;
-
-      // position tooltip and height label DOM elements
-      const tooltipEl = document.getElementById('cursorTooltip');
-      const labelEl = document.getElementById('heightLabel');
-      // position in page coords
-      const canvasRect = chartInstance.canvas.getBoundingClientRect();
-      const tooltipX = canvasRect.left + centerX;
-      const yPixel = chartInstance.scales.y.getPixelForValue(interpY);
-      const tooltipY = canvasRect.top + yPixel;
-
-      // Compose tooltip content
-      // time: determine nearest time string from fractionalIndex
-      const nearestIndex = Math.round(fractionalIndex);
-      // if in-between, show precise fractional time between labels
-      const timeStr = labels[nearestIndex] ?? labels[labels.length - 1];
-      const heightStr = interpY.toFixed(2) + ' m';
-
-      // rising/falling detection: compare small window slope
-      const slope = (() => {
-        const win = 1;
-        const i0 = Math.max(0, Math.min(labels.length - 1, Math.floor(fractionalIndex)));
-        const i1 = Math.max(0, Math.min(labels.length - 1, Math.ceil(fractionalIndex)));
-        const before = heights[Math.max(0, i0 - win)] ?? heights[i0];
-        const after = heights[Math.min(heights.length - 1, i1 + win)] ?? heights[i1];
-        return after - before;
-      })();
-      const trend = slope > 0.001 ? 'Rising' : (slope < -0.001 ? 'Falling' : 'Flat');
-
-      tooltipEl.style.display = 'block';
-      tooltipEl.innerHTML = `<strong>${timeStr}</strong> · ${heightStr} · ${trend}`;
-      // place above the Y pixel, but ensure stays inside window horizontally
-      tooltipEl.style.left = tooltipX + 'px';
-      tooltipEl.style.top = (canvasRect.top + chartArea.top) + 'px'; // pinned near top of chart
-      // centre transform in CSS handles centring
-
-      labelEl.style.display = 'block';
-      labelEl.innerText = interpY.toFixed(2) + ' m';
-      // position label just above the cursor line near top (small offset)
-      labelEl.style.left = tooltipX + 'px';
-      labelEl.style.top = (canvasRect.top + chartArea.top + 10) + 'px';
-    },
-    afterEvent(chartInstance, args) {
-      // hide tooltip when mouse leaves canvas
-      const evt = args.event;
-      if (evt.type === 'mouseout') {
-        document.getElementById('cursorTooltip').style.display = 'none';
-        document.getElementById('heightLabel').style.display = 'none';
-      }
-    }
-  }]
-});
-
-/* ===========================
-   5) Auto-centre routine (every minute)
-   Keeps "now" approximately under the fixed cursor (centre). Smooth animation applied.
-   =========================== */
-let autoCentreEnabled = autoCentreToNow;
-document.getElementById('toggleAutoBtn').innerText = `Auto-centre: ${autoCentreEnabled ? 'ON' : 'OFF'}`;
-
-function indexForTimeNow() {
-  const now = new Date();
-  // find nearest index by time difference from forecasts' timestamps
-  let bestIdx = 0;
-  let bestDiff = Infinity;
-  for (let i = 0; i < forecasts.length; i++) {
-    const d = new Date(forecasts[i].time);
-    const diff = Math.abs(d - now);
-    if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+    interaction: { mode: "nearest", intersect: false }
   }
-  return bestIdx;
-}
-
-function centreChartAtIndex(index, animate = true) {
-  // For category scale we can set min/max to show a window around index
-  const halfWindow = Math.floor(visiblePointsAtStart / 2);
-  const min = Math.max(0, index - halfWindow - 0.2);
-  const max = Math.min(labels.length - 1, index + halfWindow + 0.2);
-  // we store min/max in options.scales.x.min/max and update chart
-  chart.options.scales.x.min = min;
-  chart.options.scales.x.max = max;
-
-  if (animate) chart.update('active'); else chart.update('none');
-}
-
-function autoCentreTick() {
-  if (!autoCentreEnabled) return;
-  const idx = indexForTimeNow();
-  centreChartAtIndex(idx, true);
-}
-
-// start with centring on now
-centreChartAtIndex(indexForTimeNow(), false);
-
-// schedule auto-centre every minute
-let autoTimer = setInterval(autoCentreTick, autoCentreIntervalMs);
-
-/* Buttons */
-document.getElementById('recenterBtn').addEventListener('click', () => {
-  centreChartAtIndex(indexForTimeNow(), true);
-});
-document.getElementById('toggleAutoBtn').addEventListener('click', (e) => {
-  autoCentreEnabled = !autoCentreEnabled;
-  e.target.innerText = `Auto-centre: ${autoCentreEnabled ? 'ON' : 'OFF'}`;
 });
 
-/* When user pans or zooms, we temporarily disable auto-centre for a short time to allow manual inspection.
-   After a period of inactivity, auto-centre returns (if enabled). */
-let userInteracting = false;
-let interactionTimer = null;
-function notifyUserInteraction() {
-  userInteracting = true;
-  if (interactionTimer) clearTimeout(interactionTimer);
-  interactionTimer = setTimeout(() => {
-    userInteracting = false;
-    if (autoCentreEnabled) autoCentreTick();
-  }, 4000); // 4 seconds of no interaction => resume auto-centre
+// ------------------ CUSTOM RED LINE + DRAG LOGIC ------------------
+let dragging = false;
+let dragIndex = currentIndex;
+
+const dragInfo = document.getElementById("dragInfo");
+
+function drawRedLine(index) {
+  const chart = tideChart;
+  const ctx = chart.ctx;
+  const xPixel = chart.scales.x.getPixelForValue(index);
+
+  chart.update();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(xPixel, chart.scales.y.top);
+  ctx.lineTo(xPixel, chart.scales.y.bottom);
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
 }
-chart.canvas.addEventListener('wheel', notifyUserInteraction, {passive:true});
-chart.canvas.addEventListener('mousedown', notifyUserInteraction);
 
-/* Also bind zoom/pan events from plugin to detect user interaction */
-chart.options.plugins.zoom.pan.onPan = function({chart: c}) { notifyUserInteraction(); };
-chart.options.plugins.zoom.zoom.onZoom = function({chart: c}) { notifyUserInteraction(); };
+function updateDragDisplay(index) {
+  const h = heights[index];
+  const rising = heights[index+1] > h ? "Rising" : "Falling";
+  dragInfo.innerHTML = `${h.toFixed(2)} m — ${rising}`;
+}
 
-/* ===========================
-   6) Render the 24-hour table under the chart
-   =========================== */
-function buildTable() {
-  const tbody = document.querySelector('#tideTable tbody');
-  tbody.innerHTML = '';
-  for (let i = 0; i < labels.length; i++) {
-    const tr = document.createElement('tr');
-    const timeTd = document.createElement('td');
-    timeTd.innerText = labels[i];
-    const heightTd = document.createElement('td');
-    heightTd.innerText = heights[i].toFixed(2) + ' m';
-    const noteTd = document.createElement('td');
-    if (peaks.includes(i)) noteTd.innerHTML = '<span class="peak">High tide</span>';
-    else if (troughs.includes(i)) noteTd.innerHTML = '<span class="trough">Low tide</span>';
-    else noteTd.innerText = '';
-    tr.appendChild(timeTd); tr.appendChild(heightTd); tr.appendChild(noteTd);
-    tbody.appendChild(tr);
+function resetToCurrentTime() {
+  dragIndex = currentIndex;
+  dragInfo.innerHTML = "";
+  drawRedLine(dragIndex);
+}
+
+// ------------------ Mouse Events ------------------
+document.getElementById("tideChart").addEventListener("mousedown", (e) => {
+  dragging = true;
+});
+
+document.addEventListener("mouseup", () => {
+  if (dragging) {
+    dragging = false;
+    resetToCurrentTime();
   }
-}
-buildTable();
+});
 
-/* ===========================
-   7) Keep tooltip updated while user moves (on animation frame)
-   We'll call chart.draw() periodically so plugin 'afterDraw' updates DOM position.
-   =========================== */
-function refreshOverlay() {
-  // only update overlays (they are updated in afterDraw plugin)
-  chart.draw();
-  requestAnimationFrame(refreshOverlay);
-}
-requestAnimationFrame(refreshOverlay);
+document.addEventListener("mousemove", (e) => {
+  if (!dragging) return;
 
-/* ===========================
-   8) Optional: if you want to programmatically load real API data:
-   - replace `forecasts` array with your fetched data (same structure)
-   - rebuild labels/heights/peaks/troughs/dataPoints and call chart.data.datasets[0].data = heights; chart.data.labels = labels; chart.update();
-   =========================== */
+  const rect = tideChart.canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
 
-/* Notes:
-   - The red cursor is fixed at the centre of the canvas. Pan/zoom moves the data beneath it.
-   - The tooltip shows the interpolated height at the cursor and a 'Rising/Falling' status.
-   - Peaks/troughs are highlighted as larger points and labelled in the table.
-   - Auto-centre keeps current real time near the centre; if you manually interact it will pause briefly.
-*/
+  const scale = tideChart.scales.x;
+  const index = Math.round(scale.getValueForPixel(x));
+
+  if (index >= 0 && index < heights.length) {
+    dragIndex = index;
+    drawRedLine(index);
+    updateDragDisplay(index);
+  }
+});
+
+// ------------ Initial red line ------------
+drawRedLine(currentIndex);
+
+// ------------ Update red line every minute ------------
+setInterval(() => {
+  if (!dragging) {
+    const now = new Date();
+    let newIndex = currentIndex;
+    forecasts.forEach((f, i) => {
+      if (new Date(f.time) < now) newIndex = i;
+    });
+    currentIndex = newIndex;
+    drawRedLine(currentIndex);
+  }
+}, 60000);
+
 </script>
-
 </body>
 </html>
