@@ -8,13 +8,6 @@
   body { font-family: sans-serif; background: #f0f8ff; margin: 20px; }
   h1 { text-align: center; color: #004080; }
   #chartContainer { width: 90%; max-width: 900px; margin: 30px auto; }
-  #infoBox {
-    text-align: center;
-    margin-top: 10px;
-    font-size: 18px;
-    color: #b30000;
-    font-weight: bold;
-  }
 </style>
 </head>
 <body>
@@ -23,10 +16,9 @@
 <div id="chartContainer">
   <canvas id="tideChart"></canvas>
 </div>
-<div id="infoBox"></div>
 
 <script>
-// ------------------ ORIGINAL SAMPLE DATA ------------------
+// 24-hour sample data
 const forecasts = [
   {"time":"2025-11-18T00:00:00","height":1.2},
   {"time":"2025-11-18T01:00:00","height":1.4},
@@ -54,22 +46,7 @@ const forecasts = [
   {"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
-// ---- Find High & Low Tide Points ----
-function getHLPoints(heights) {
-  const high = [];
-  const low = [];
-
-  for (let i = 1; i < heights.length - 1; i++) {
-    if (heights[i] > heights[i-1] && heights[i] > heights[i+1]) {
-      high.push(i);
-    }
-    if (heights[i] < heights[i-1] && heights[i] < heights[i+1]) {
-      low.push(i);
-    }
-  }
-  return { high, low };
-}
-
+// Process time, labels, find current hour
 function processData(forecasts) {
   const labels = [];
   const heights = [];
@@ -86,8 +63,36 @@ function processData(forecasts) {
   return { labels, heights, currentIndex };
 }
 
-const { labels, heights, currentIndex } = processData(forecasts);
-const HL = getHLPoints(heights);
+let dragIndex = null;        // the index used during drag
+let isDragging = false;      // dragging state
+
+function drawCustomTooltip(chart, index, heights) {
+  const ctx = chart.ctx;
+  const x = chart.scales.x.getPixelForValue(index);
+  const y = chart.scales.y.getPixelForValue(heights[index]);
+
+  const rising = heights[index+1] > heights[index] ? "Rising" :
+                 heights[index+1] < heights[index] ? "Falling" : "Steady";
+
+  const text = `${heights[index].toFixed(2)} m (${rising})`;
+
+  ctx.save();
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 1;
+
+  // Tooltip box
+  ctx.beginPath();
+  ctx.rect(x + 10, y - 20, ctx.measureText(text).width + 12, 20);
+  ctx.fill();
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = "black";
+  ctx.fillText(text, x + 16, y - 6);
+
+  ctx.restore();
+}
 
 function drawChart(labels, heights, currentIndex) {
   const ctx = document.getElementById('tideChart').getContext('2d');
@@ -96,94 +101,89 @@ function drawChart(labels, heights, currentIndex) {
     type: 'line',
     data: {
       labels: labels,
-      datasets: [
-        {
-          label: 'Tide Height (m)',
-          data: heights,
-          fill: true,
-          borderColor: '#007bff',
-          backgroundColor: 'rgba(0,123,255,0.2)',
-          tension: 0.3,
-          pointRadius: function(context) {
-            const i = context.dataIndex;
-            if (HL.high.includes(i)) return 7;   // bigger point
-            if (HL.low.includes(i)) return 7;
-            return 3;
-          },
-          pointBackgroundColor: function(context){
-            const i = context.dataIndex;
-            if (HL.high.includes(i)) return "blue";
-            if (HL.low.includes(i)) return "green";
-            return "#007bff";
-          }
-        }
-      ]
+      datasets: [{
+        label: 'Tide Height (m)',
+        data: heights,
+        fill: true,
+        borderColor: '#007bff',
+        backgroundColor: 'rgba(0,123,255,0.2)',
+        tension: 0.3,
+        pointRadius: 3
+      }]
     },
     options: {
       responsive: true,
-      plugins: { legend:{display:false}, tooltip:{enabled:false} },
+      animation: false,
+      plugins: { tooltip: { enabled: false }, legend: { display: false } },
       scales: {
-        x: { title: { display:true, text:'Time' } },
+        x: { title: { display: true, text: 'Time' } },
         y: {
-          title: { display:true, text:'Height (m)' },
+          title: { display: true, text: 'Height (m)' },
           suggestedMin: Math.min(...heights)-0.5,
           suggestedMax: Math.max(...heights)+0.5
         }
-      },
-      animation:false
+      }
     }
   });
 
-  // ---------------- DRAW RED LINE ----------------
-  function drawRedLine(index) {
-    const chart = tideChart;
-    chart.update();
-    const ctx2 = chart.ctx;
-    const xPixel = chart.scales.x.getPixelForValue(index);
+  const canvas = tideChart.canvas;
+  const rect = canvas.getBoundingClientRect();
 
+  // Draw everything including tooltip + red line
+  function redraw() {
+    tideChart.update();
+
+    const index = isDragging ? dragIndex : currentIndex;
+    const xPixel = tideChart.scales.x.getPixelForValue(index);
+
+    const ctx2 = tideChart.ctx;
     ctx2.save();
     ctx2.beginPath();
-    ctx2.moveTo(xPixel, chart.scales.y.top);
-    ctx2.lineTo(xPixel, chart.scales.y.bottom);
+    ctx2.moveTo(xPixel, tideChart.scales.y.top);
+    ctx2.lineTo(xPixel, tideChart.scales.y.bottom);
     ctx2.strokeStyle = 'red';
     ctx2.lineWidth = 2;
     ctx2.stroke();
     ctx2.restore();
+
+    drawCustomTooltip(tideChart, index, heights);
   }
 
-  drawRedLine(currentIndex);
+  redraw();
+  tideChart.options.animation = false;
 
-  // ---------------- DRAGGING + CUSTOM TOOLTIP ----------------
-  const canvas = tideChart.canvas;
-  const infoBox = document.getElementById("infoBox");
-  let dragging = false;
-
-  canvas.addEventListener("mousedown", () => dragging = true);
-  canvas.addEventListener("mouseup", () => {
-    dragging = false;
-    infoBox.innerHTML = "";
-    drawRedLine(currentIndex); // snap back to NOW
+  // Dragging behaviour
+  canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
   });
 
-  canvas.addEventListener("mousemove", (e) => {
-    if (!dragging) return;
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
 
-    const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const index = Math.round(tideChart.scales.x.getValueForPixel(x));
+    let nearest = tideChart.scales.x.getValueForPixel(x);
 
-    if (index >= 0 && index < heights.length) {
-      const h = heights[index];
-      const rising = heights[index+1] > h ? "Rising" : "Falling";
-      infoBox.innerHTML = `${h.toFixed(2)} m — ${rising}`;
-      drawRedLine(index);
-    }
+    nearest = Math.round(nearest);
+    nearest = Math.max(0, Math.min(nearest, heights.length - 1));
+
+    dragIndex = nearest;
+    redraw();
   });
 
-  return tideChart;
+  canvas.addEventListener('mouseup', () => {
+    isDragging = false;
+    redraw(); // return to currentIndex
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
+    redraw(); // return
+  });
 }
 
+const { labels, heights, currentIndex } = processData(forecasts);
 drawChart(labels, heights, currentIndex);
+
 </script>
 
 </body>
