@@ -1,435 +1,190 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Seaview Marina — Interactive Tide Chart</title>
-
-<!-- Chart.js + zoom plugin -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+<meta charset="UTF-8">
+<title>Seaview Marina Tide Forecast</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-
 <style>
-  :root { --bg: #f0f8ff; --accent: #007bff; --text: #003049; }
-  body { font-family: "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 18px; }
-  h1 { text-align:center; margin-bottom: 6px; color: #004080; }
-  #chartWrap { width: 92%; max-width: 1000px; margin: 18px auto; background:#fff; border-radius:10px; padding:12px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
-  canvas { display:block; height: 420px; width:100%; }
+  body { font-family: sans-serif; background: #f0f8ff; margin: 20px; }
+  h1 { text-align:center; color:#004080; }
+  #chartWrap { width:90%; max-width:900px; margin:auto; position:relative; }
+  canvas { background:#fff; border-radius:6px; }
   .tooltip-box {
-    position: absolute;
-    pointer-events: none;
-    background: rgba(0,0,0,0.85);
-    color: #fff;
-    padding: 8px 10px;
-    border-radius: 6px;
-    font-size: 13px;
-    transform: translate(-50%, -110%);
-    white-space: nowrap;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-    z-index: 10;
-    display:none;
+    position:absolute; pointer-events:none; background:rgba(0,0,0,0.8);
+    color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none;
+    transform:translate(-50%, -110%);
   }
-  .table-wrap { width: 92%; max-width: 1000px; margin: 8px auto 40px; background:#fff; border-radius:10px; padding:12px; box-shadow: 0 6px 18px rgba(0,0,0,0.04); }
-  table { width:100%; border-collapse: collapse; font-size: 14px; }
-  th, td { padding:8px 6px; text-align:left; border-bottom: 1px solid #eee; }
-  th { background: #f7fbff; color: #004080; }
-  .peak { color: #d9534f; font-weight:700; }
-  .trough { color: #0275d8; font-weight:700; }
-  .controls { width:92%; max-width:1000px; margin: 6px auto; display:flex; gap:8px; align-items:center; justify-content:flex-end; }
-  .btn { padding:6px 10px; border-radius:6px; border:0; background:var(--accent); color:#fff; cursor:pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-  .small { font-size:13px; padding:5px 8px; }
+  table { width:90%; max-width:900px; margin:20px auto; border-collapse:collapse; }
+  th, td { padding:6px; border-bottom:1px solid #eee; }
+  th { background:#f7fbff; color:#004080; }
+  .peak { color:red; font-weight:600; }
+  .trough { color:blue; font-weight:600; }
 </style>
 </head>
 <body>
 
-<h1>Seaview Marina — 24h Tide (Interactive)</h1>
-
-<div class="controls">
-  <button id="resetView" class="btn small">Reset Zoom / Pan</button>
-</div>
-
+<h1>Seaview Marina Tide Forecast</h1>
 <div id="chartWrap">
   <canvas id="tideChart"></canvas>
   <div id="lineTooltip" class="tooltip-box"></div>
 </div>
-
-<div class="table-wrap">
-  <h3 style="margin-top:0">24-hour tide table</h3>
-  <table id="tideTable" aria-live="polite">
-    <thead><tr><th>Time</th><th>Height (m)</th><th>Note</th></tr></thead>
-    <tbody></tbody>
-  </table>
-</div>
+<table id="tideTable">
+  <thead><tr><th>Time</th><th>Height (m)</th><th>Note</th></tr></thead>
+  <tbody></tbody>
+</table>
 
 <script>
-/* ---------------------------
-   Sample inline tide data (24 hours)
-   Replace this with your API response if needed.
-   --------------------------- */
+// Sample 24h tide data
 const forecasts = [
-  {"time":"2025-11-18T00:00:00","height":1.2},
-  {"time":"2025-11-18T01:00:00","height":1.4},
-  {"time":"2025-11-18T02:00:00","height":1.6},
-  {"time":"2025-11-18T03:00:00","height":1.8},
-  {"time":"2025-11-18T04:00:00","height":1.7},
-  {"time":"2025-11-18T05:00:00","height":1.5},
-  {"time":"2025-11-18T06:00:00","height":1.3},
-  {"time":"2025-11-18T07:00:00","height":1.2},
-  {"time":"2025-11-18T08:00:00","height":1.4},
-  {"time":"2025-11-18T09:00:00","height":1.6},
-  {"time":"2025-11-18T10:00:00","height":1.9},
-  {"time":"2025-11-18T11:00:00","height":2.1},
-  {"time":"2025-11-18T12:00:00","height":2.0},
-  {"time":"2025-11-18T13:00:00","height":1.8},
-  {"time":"2025-11-18T14:00:00","height":1.6},
-  {"time":"2025-11-18T15:00:00","height":1.5},
-  {"time":"2025-11-18T16:00:00","height":1.4},
-  {"time":"2025-11-18T17:00:00","height":1.3},
-  {"time":"2025-11-18T18:00:00","height":1.2},
-  {"time":"2025-11-18T19:00:00","height":1.3},
-  {"time":"2025-11-18T20:00:00","height":1.5},
-  {"time":"2025-11-18T21:00:00","height":1.7},
-  {"time":"2025-11-18T22:00:00","height":1.6},
-  {"time":"2025-11-18T23:00:00","height":1.4}
+  {"time":"2025-11-18T00:00:00","height":1.2},{"time":"2025-11-18T01:00:00","height":1.4},
+  {"time":"2025-11-18T02:00:00","height":1.6},{"time":"2025-11-18T03:00:00","height":1.8},
+  {"time":"2025-11-18T04:00:00","height":1.7},{"time":"2025-11-18T05:00:00","height":1.5},
+  {"time":"2025-11-18T06:00:00","height":1.3},{"time":"2025-11-18T07:00:00","height":1.2},
+  {"time":"2025-11-18T08:00:00","height":1.4},{"time":"2025-11-18T09:00:00","height":1.6},
+  {"time":"2025-11-18T10:00:00","height":1.9},{"time":"2025-11-18T11:00:00","height":2.1},
+  {"time":"2025-11-18T12:00:00","height":2.0},{"time":"2025-11-18T13:00:00","height":1.8},
+  {"time":"2025-11-18T14:00:00","height":1.6},{"time":"2025-11-18T15:00:00","height":1.5},
+  {"time":"2025-11-18T16:00:00","height":1.4},{"time":"2025-11-18T17:00:00","height":1.3},
+  {"time":"2025-11-18T18:00:00","height":1.2},{"time":"2025-11-18T19:00:00","height":1.3},
+  {"time":"2025-11-18T20:00:00","height":1.5},{"time":"2025-11-18T21:00:00","height":1.7},
+  {"time":"2025-11-18T22:00:00","height":1.6},{"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
-/* ---------------------------
-   Convert forecasts to ChartJS time-series points
-   --------------------------- */
-const dataPoints = forecasts.map(f => ({ x: new Date(f.time), y: f.height }));
+// Convert to ChartJS data points
+const dataPoints = forecasts.map(f=>({ x:new Date(f.time), y:f.height }));
 
-/* ---------------------------
-   Compute high / low markers (local maxima / minima)
-   --------------------------- */
+// High/low markers
 const peaks = [];
-for (let i=1; i<dataPoints.length-1; i++){
-  const prev = dataPoints[i-1].y, cur = dataPoints[i].y, next = dataPoints[i+1].y;
-  if (cur > prev && cur > next) peaks.push({...dataPoints[i], note:'High'});
-  if (cur < prev && cur < next) peaks.push({...dataPoints[i], note:'Low'});
+for(let i=1;i<dataPoints.length-1;i++){
+  const prev=dataPoints[i-1].y, cur=dataPoints[i].y, next=dataPoints[i+1].y;
+  if(cur>prev && cur>next) peaks.push({...dataPoints[i], note:'High'});
+  if(cur<prev && cur<next) peaks.push({...dataPoints[i], note:'Low'});
 }
 
-/* ---------------------------
-   Build table (24-hour)
-   --------------------------- */
-function buildTable() {
-  const tbody = document.querySelector('#tideTable tbody');
-  tbody.innerHTML = '';
-  dataPoints.forEach(dp => {
-    const tr = document.createElement('tr');
-    const t = new Date(dp.x);
-    const timeStr = t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    const note = peaks.find(p => +p.x === +dp.x)?.note || '';
-    tr.innerHTML = `<td>${timeStr}</td><td>${dp.y.toFixed(2)}</td><td>${note ? (note === 'High' ? '<span class="peak">High</span>' : '<span class="trough">Low</span>') : ''}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-buildTable();
+// Build table
+const tbody = document.querySelector('#tideTable tbody');
+dataPoints.forEach(dp=>{
+  const t=new Date(dp.x).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  const note = peaks.find(p=>+p.x===+dp.x)?.note||'';
+  tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td>${note ? (note==='High'?'<span class="peak">High</span>':'<span class="trough">Low</span>') : ''}</td></tr>`;
+});
 
-/* ---------------------------
-   Chart.js main setup
-   --------------------------- */
-const ctx = document.getElementById('tideChart').getContext('2d');
+// Chart
+const ctx=document.getElementById('tideChart').getContext('2d');
+let markerTime = new Date();
+let isDragging=false;
+const tooltip=document.getElementById('lineTooltip');
 
-/* markerTime: the time (ms) where the vertical line is drawn.
-   If user drags, markerTime follows mouse. When released, we'll animate back to realNow.
-*/
-let markerTime = Date.now();
-let isDragging = false;
-let dragX = null;
-const tooltipBox = document.getElementById('lineTooltip');
-
-/* helpers */
-function formatTime(dt) {
-  return new Date(dt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-}
-function lerp(a,b,t){ return a + (b-a)*t; }
-
-/* Interpolate y-value and slope at an arbitrary time (ms).
-   Uses linear interpolation between the two nearest points.
-   Returns {y, slope} where slope>0 => rising, <0 => falling.
-*/
 function sampleAt(timeMs){
-  const t = timeMs;
-  // if outside range clamp
-  if (t <= +dataPoints[0].x) return { y: dataPoints[0].y, slope: dataPoints[1].y - dataPoints[0].y };
-  if (t >= +dataPoints[dataPoints.length-1].x) return { y: dataPoints[dataPoints.length-1].y, slope: dataPoints[dataPoints.length-1].y - dataPoints[dataPoints.length-2].y };
-
-  // find segment
-  for (let i=0;i<dataPoints.length-1;i++){
-    const t0 = +dataPoints[i].x, t1 = +dataPoints[i+1].x;
-    if (t >= t0 && t <= t1){
-      const ratio = (t - t0) / (t1 - t0);
-      const y = lerp(dataPoints[i].y, dataPoints[i+1].y, ratio);
-      const slope = (dataPoints[i+1].y - dataPoints[i].y) / ((t1 - t0)/3600000); // m per hour (approx)
-      return { y, slope };
+  if(timeMs<=+dataPoints[0].x) return {y:dataPoints[0].y,slope:dataPoints[1].y-dataPoints[0].y};
+  if(timeMs>=+dataPoints[dataPoints.length-1].x) return {y:dataPoints[dataPoints.length-1].y,slope:dataPoints[dataPoints.length-1].y-dataPoints[dataPoints.length-2].y};
+  for(let i=0;i<dataPoints.length-1;i++){
+    const t0=+dataPoints[i].x,t1=+dataPoints[i+1].x;
+    if(timeMs>=t0 && timeMs<=t1){
+      const ratio=(timeMs-t0)/(t1-t0);
+      const y=dataPoints[i].y + (dataPoints[i+1].y-dataPoints[i].y)*ratio;
+      const slope=(dataPoints[i+1].y-dataPoints[i].y)/((t1-t0)/3600000);
+      return {y,slope};
     }
   }
-  // fallback
-  return { y: dataPoints[dataPoints.length-1].y, slope: 0 };
+  return {y:dataPoints[dataPoints.length-1].y,slope:0};
 }
 
-/* Custom plugin to draw the vertical line and markers */
-const verticalLinePlugin = {
-  id: 'verticalLinePlugin',
+// Vertical line plugin
+const verticalLinePlugin={
+  id:'verticalLinePlugin',
   afterDraw(chart){
-    const xScale = chart.scales.x;
-    const yScale = chart.scales.y;
-    if (!xScale || !yScale) return;
-
-    // Draw the vertical red line at markerTime
-    const x = xScale.getPixelForValue(markerTime);
-    const ctx = chart.ctx;
-
-    // only draw if within chart area horizontally
-    if (x < xScale.left - 50 || x > xScale.right + 50) return;
-
+    const xScale=chart.scales.x, yScale=chart.scales.y;
+    if(!xScale || !yScale) return;
+    const x=xScale.getPixelForValue(markerTime);
+    const ctx=chart.ctx;
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(x, yScale.top);
-    ctx.lineTo(x, yScale.bottom);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'red';
+    ctx.moveTo(x,yScale.top);
+    ctx.lineTo(x,yScale.bottom);
+    ctx.strokeStyle='red';
+    ctx.lineWidth=2;
     ctx.stroke();
-
-    // draw small circle at intersection with the line (on top of the chart line)
-    const sampled = sampleAt(markerTime);
-    const yPixel = yScale.getPixelForValue(sampled.y);
-    ctx.fillStyle = 'red';
-    ctx.beginPath();
-    ctx.arc(x, yPixel, 4, 0, Math.PI*2);
-    ctx.fill();
-
+    // circle at line
+    const s=sampleAt(+markerTime);
+    const y=yScale.getPixelForValue(s.y);
+    ctx.fillStyle='red';
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
     ctx.restore();
   }
 };
 
-/* Peak markers dataset */
-const peaksDataset = {
-  label: 'Peaks',
-  data: peaks.map(p => ({ x: p.x, y: p.y })),
-  pointRadius: 6,
-  showLine: false,
-  pointStyle: peaks.map(p => p.note === 'High' ? 'triangle' : 'rectRot'),
-  backgroundColor: peaks.map(p => p.note === 'High' ? '#d9534f' : '#0275d8'),
-  borderColor: peaks.map(p => p.note === 'High' ? '#d9534f' : '#0275d8'),
-  hoverRadius: 8
+// Peaks dataset
+const peaksDataset={
+  label:'Peaks', data:peaks, pointRadius:6, showLine:false,
+  pointStyle:peaks.map(p=>p.note==='High'?'triangle':'rectRot'),
+  backgroundColor:peaks.map(p=>p.note==='High'?'red':'blue'),
+  borderColor:peaks.map(p=>p.note==='High'?'red':'blue')
 };
 
-const mainDataset = {
-  label: 'Tide height',
-  data: dataPoints,
-  borderColor: '#007bff',
-  backgroundColor: 'rgba(0,123,255,0.12)',
-  tension: 0.25,
-  pointRadius: 2,
-  borderWidth: 2,
-  fill: true
+const mainDataset={
+  label:'Tide height', data:dataPoints, borderColor:'#007bff',
+  backgroundColor:'rgba(0,123,255,0.2)', tension:0.25, pointRadius:2, fill:true
 };
 
-/* Create chart */
-const tideChart = new Chart(ctx, {
-  type: 'line',
-  data: { datasets: [ mainDataset, peaksDataset ] },
-  options: {
-    maintainAspectRatio: false,
-    animation: { duration: 500, easing: 'easeOutQuad' },
-    scales: {
-      x: {
-        type: 'time',
-        time: { unit: 'hour', tooltipFormat: 'HH:mm' },
-        ticks: { maxRotation: 0, autoSkip: true },
-        title: { display: true, text: 'Time' }
-      },
-      y: {
-        title: { display:true, text: 'Height (m)' },
-        suggestedMin: Math.min(...dataPoints.map(d=>d.y)) - 0.5,
-        suggestedMax: Math.max(...dataPoints.map(d=>d.y)) + 0.5
-      }
+const chart=new Chart(ctx,{
+  type:'line', data:{datasets:[mainDataset, peaksDataset]},
+  options:{
+    animation:false,
+    maintainAspectRatio:false,
+    scales:{
+      x:{type:'time', time:{unit:'hour', tooltipFormat:'HH:mm'}, title:{display:true,text:'Time'}},
+      y:{title:{display:true,text:'Height (m)'}}
     },
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: false }, // we use custom tooltip for the vertical line
-      zoom: {
-        zoom: {
-          wheel: { enabled: true, modifierKey: 'ctrl' }, // wheel zoom when Ctrl is held
-          pinch: { enabled: true },
-          mode: 'x',
-        },
-        pan: {
-          enabled: true,
-          mode: 'x',
-          threshold: 6,
-          onPan: ({chart}) => { chart.draw(); } // redraw to keep line position correct
-        },
-        limits: {
-          x: { min: dataPoints[0].x, max: dataPoints[dataPoints.length-1].x }
-        }
+    plugins:{
+      legend:{display:false},
+      tooltip:{enabled:false},
+      zoom:{
+        zoom:{wheel:{enabled:true,modifierKey:'ctrl'},mode:'x'}, 
+        pan:{enabled:true,mode:'x'}
       }
     }
   },
-  plugins: [ verticalLinePlugin ]
+  plugins:[verticalLinePlugin]
 });
 
-/* ---------------------------
-   Interaction: drag the vertical line horizontally
-   - on mousedown inside chart area -> start dragging
-   - on mousemove (dragging) -> update markerTime and tooltip
-   - on mouseup -> stop dragging and animate back to real time
-   --------------------------- */
+// Drag interaction
+const canvas=chart.canvas;
+function pixelToTime(px){ return chart.scales.x.getValueForPixel(px); }
 
-const canvas = tideChart.canvas;
-const rect = () => canvas.getBoundingClientRect();
+canvas.addEventListener('mousedown',e=>{ isDragging=true; markerTime=pixelToTime(e.offsetX); showTooltip(e); });
+canvas.addEventListener('mousemove',e=>{ if(isDragging){ markerTime=pixelToTime(e.offsetX); showTooltip(e); chart.draw(); }});
+canvas.addEventListener('mouseup',e=>{ if(isDragging){ isDragging=false; hideTooltip(); animateMarkerTo(new Date()); }});
 
-function pixelToTime(pixelX){
-  const chartArea = tideChart.chartArea;
-  const xScale = tideChart.scales.x;
-  // convert client pixel to chart pixel
-  const localX = pixelX - rect().left;
-  // get value for pixel (Chart.js time scale supports this)
-  if (typeof xScale.getValueForPixel === 'function') {
-    return xScale.getValueForPixel(localX);
-  }
-  // fallback: map proportionally
-  const leftPx = xScale.left, rightPx = xScale.right;
-  const leftVal = +xScale.getLabelForValue(0) || +dataPoints[0].x;
-  const rightVal = +xScale.getLabelForValue(xScale.ticks.length-1) || +dataPoints[dataPoints.length-1].x;
-  const ratio = (localX - leftPx) / (rightPx - leftPx);
-  return leftVal + (rightVal - leftVal) * ratio;
+function showTooltip(e){
+  const s=sampleAt(+markerTime);
+  const trend=s.slope>0.0001?'Rising':(s.slope<-0.0001?'Falling':'Stable');
+  tooltip.style.display='block';
+  tooltip.innerHTML=`<strong>${new Date(markerTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
+  tooltip.style.left=`${e.offsetX}px`; tooltip.style.top=`${e.offsetY-10}px`;
 }
+function hideTooltip(){ tooltip.style.display='none'; }
 
-function showTooltipAt(timeMs, clientX, clientY){
-  const s = sampleAt(timeMs);
-  const timeStr = formatTime(timeMs);
-  const heightStr = s.y.toFixed(2) + ' m';
-  const trend = s.slope > 0.0001 ? 'Rising' : (s.slope < -0.0001 ? 'Falling' : 'Stable');
-  tooltipBox.innerHTML = `<strong>${timeStr}</strong><div style="margin-top:4px">${heightStr} — ${trend}</div>`;
-  tooltipBox.style.display = 'block';
-  // position tooltip near pointer but keep inside chartWrap horizontally
-  const wrapRect = document.getElementById('chartWrap').getBoundingClientRect();
-  let left = clientX - wrapRect.left;
-  if (left < 40) left = 40;
-  if (left > wrapRect.width - 40) left = wrapRect.width - 40;
-  tooltipBox.style.left = `${left}px`;
-  // set y to top of chart
-  tooltipBox.style.top = `${clientY - wrapRect.top - 12}px`;
-}
-
-function hideTooltip(){
-  tooltipBox.style.display = 'none';
-}
-
-/* Drag handling */
-canvas.addEventListener('mousedown', (e) => {
-  const within = isEventWithinChart(e);
-  if (!within) return;
-  isDragging = true;
-  canvas.style.cursor = 'grabbing';
-  const timeAt = pixelToTime(e.clientX);
-  markerTime = +new Date(timeAt);
-  dragX = e.clientX;
-  tideChart.draw();
-  showTooltipAt(markerTime, e.clientX, e.clientY);
-});
-window.addEventListener('mousemove', (e) => {
-  if (!isDragging) return;
-  const timeAt = pixelToTime(e.clientX);
-  markerTime = +new Date(timeAt);
-  tideChart.draw();
-  showTooltipAt(markerTime, e.clientX, e.clientY);
-});
-window.addEventListener('mouseup', (e) => {
-  if (!isDragging) return;
-  isDragging = false;
-  canvas.style.cursor = 'default';
-  hideTooltip();
-  // animate back to real time
-  animateMarkerTo(Date.now());
-});
-
-/* Also support touch events */
-canvas.addEventListener('touchstart', (e) => {
-  const t = e.touches[0];
-  if (!isEventWithinChart(t)) return;
-  e.preventDefault();
-  isDragging = true;
-  const timeAt = pixelToTime(t.clientX);
-  markerTime = +new Date(timeAt);
-  tideChart.draw();
-  showTooltipAt(markerTime, t.clientX, t.clientY);
-}, {passive:false});
-window.addEventListener('touchmove', (e) => {
-  if (!isDragging) return;
-  const t = e.touches[0];
-  const timeAt = pixelToTime(t.clientX);
-  markerTime = +new Date(timeAt);
-  tideChart.draw();
-  showTooltipAt(markerTime, t.clientX, t.clientY);
-}, {passive:false});
-window.addEventListener('touchend', (e) => {
-  if (!isDragging) return;
-  isDragging = false;
-  hideTooltip();
-  animateMarkerTo(Date.now());
-});
-
-/* helper to detect clicks only within chart drawing area */
-function isEventWithinChart(e){
-  const r = tideChart.chartArea;
-  const left = rect().left + r.left;
-  const right = rect().left + r.right;
-  const top = rect().top + r.top;
-  const bottom = rect().top + r.bottom;
-  return e.clientX >= left && e.clientX <= right && e.clientY >= top && e.clientY <= bottom;
-}
-
-/* Animate markerTime from current markerTime to targetTime (ms) */
-function animateMarkerTo(targetTime){
-  const start = markerTime;
-  const duration = 800; // ms
-  const t0 = performance.now();
+function animateMarkerTo(target){
+  const start=+markerTime;
+  const end=+target; const t0=performance.now();
   function step(now){
-    const elapsed = now - t0;
-    const frac = Math.min(1, elapsed / duration);
-    // easeOutQuad
-    const ease = 1 - (1 - frac) * (1 - frac);
-    markerTime = start + (targetTime - start) * ease;
-    tideChart.draw();
-    if (frac < 1) requestAnimationFrame(step);
-    else {
-      markerTime = targetTime;
-      tideChart.draw();
-    }
+    const elapsed=now-t0; const frac=Math.min(1,elapsed/800);
+    const ease=1-(1-frac)*(1-frac);
+    markerTime=new Date(start + (end-start)*ease);
+    chart.draw();
+    if(frac<1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
-/* Auto-update every minute to real current time (unless dragging) */
-function tickRealTime(){
-  if (!isDragging){
-    const now = Date.now();
-    animateMarkerTo(now);
-  }
-}
-// set initial markerTime to now (clamped to forecast range)
-const nowClamped = Math.min(Math.max(Date.now(), +dataPoints[0].x), +dataPoints[dataPoints.length-1].x);
-markerTime = nowClamped;
-tideChart.draw();
+// Auto-update every minute
+setInterval(()=>{ if(!isDragging) animateMarkerTo(new Date()); }, 60000);
 
-// tick every minute on the minute
-const msToNextMinute = (60 - new Date().getSeconds()) * 1000 - new Date().getMilliseconds();
-setTimeout(() => {
-  tickRealTime();
-  setInterval(tickRealTime, 60*1000);
-}, msToNextMinute);
-
-/* Reset view (zoom/pan) button */
-document.getElementById('resetView').addEventListener('click', () => {
-  tideChart.resetZoom();
-  tideChart.draw();
-});
-
-/* Hide tooltip if user scrolls/zooms without dragging */
-document.addEventListener('scroll', hideTooltip, true);
-
+// Initial markerTime
+markerTime=new Date(); chart.draw();
 </script>
+
 </body>
 </html>
