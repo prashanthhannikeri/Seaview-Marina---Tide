@@ -4,12 +4,11 @@
 <meta charset="UTF-8">
 <title>Seaview Marina Tide Forecast</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <style>
-  body { font-family: sans-serif; background: #f0f8ff; margin: 20px; }
+  body { font-family:sans-serif; background:#f0f8ff; margin:20px; }
   h1 { text-align:center; color:#004080; }
   #chartWrap { width:90%; max-width:900px; margin:auto; position:relative; }
-  canvas { background:#fff; border-radius:6px; }
+  canvas { background:#fff; border-radius:6px; display:block; height:400px; width:100%; }
   .tooltip-box {
     position:absolute; pointer-events:none; background:rgba(0,0,0,0.8);
     color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none;
@@ -52,18 +51,18 @@ const forecasts = [
 ];
 
 // Convert to ChartJS data points
-const dataPoints = forecasts.map(f=>({ x:new Date(f.time), y:f.height }));
+const dataPoints = forecasts.map(f=>({x:new Date(f.time),y:f.height}));
 
 // High/low markers
-const peaks = [];
+const peaks=[];
 for(let i=1;i<dataPoints.length-1;i++){
-  const prev=dataPoints[i-1].y, cur=dataPoints[i].y, next=dataPoints[i+1].y;
-  if(cur>prev && cur>next) peaks.push({...dataPoints[i], note:'High'});
-  if(cur<prev && cur<next) peaks.push({...dataPoints[i], note:'Low'});
+  const prev=dataPoints[i-1].y,cur=dataPoints[i].y,next=dataPoints[i+1].y;
+  if(cur>prev && cur>next) peaks.push({...dataPoints[i],note:'High'});
+  if(cur<prev && cur<next) peaks.push({...dataPoints[i],note:'Low'});
 }
 
 // Build table
-const tbody = document.querySelector('#tideTable tbody');
+const tbody=document.querySelector('#tideTable tbody');
 dataPoints.forEach(dp=>{
   const t=new Date(dp.x).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   const note = peaks.find(p=>+p.x===+dp.x)?.note||'';
@@ -72,7 +71,7 @@ dataPoints.forEach(dp=>{
 
 // Chart
 const ctx=document.getElementById('tideChart').getContext('2d');
-let markerTime = new Date();
+let markerTime=new Date();
 let isDragging=false;
 const tooltip=document.getElementById('lineTooltip');
 
@@ -95,22 +94,18 @@ function sampleAt(timeMs){
 const verticalLinePlugin={
   id:'verticalLinePlugin',
   afterDraw(chart){
-    const xScale=chart.scales.x, yScale=chart.scales.y;
-    if(!xScale || !yScale) return;
+    const xScale=chart.scales.x,yScale=chart.scales.y;
+    if(!xScale||!yScale) return;
     const x=xScale.getPixelForValue(markerTime);
     const ctx=chart.ctx;
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(x,yScale.top);
     ctx.lineTo(x,yScale.bottom);
-    ctx.strokeStyle='red';
-    ctx.lineWidth=2;
-    ctx.stroke();
-    // circle at line
+    ctx.strokeStyle='red'; ctx.lineWidth=2; ctx.stroke();
     const s=sampleAt(+markerTime);
     const y=yScale.getPixelForValue(s.y);
-    ctx.fillStyle='red';
-    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
     ctx.restore();
   }
 };
@@ -129,7 +124,7 @@ const mainDataset={
 };
 
 const chart=new Chart(ctx,{
-  type:'line', data:{datasets:[mainDataset, peaksDataset]},
+  type:'line', data:{datasets:[mainDataset,peaksDataset]},
   options:{
     animation:false,
     maintainAspectRatio:false,
@@ -137,25 +132,17 @@ const chart=new Chart(ctx,{
       x:{type:'time', time:{unit:'hour', tooltipFormat:'HH:mm'}, title:{display:true,text:'Time'}},
       y:{title:{display:true,text:'Height (m)'}}
     },
-    plugins:{
-      legend:{display:false},
-      tooltip:{enabled:false},
-      zoom:{
-        zoom:{wheel:{enabled:true,modifierKey:'ctrl'},mode:'x'}, 
-        pan:{enabled:true,mode:'x'}
-      }
-    }
+    plugins:{legend:{display:false}, tooltip:{enabled:false}}
   },
   plugins:[verticalLinePlugin]
 });
 
-// Drag interaction
+// Drag
 const canvas=chart.canvas;
-function pixelToTime(px){ return chart.scales.x.getValueForPixel(px); }
-
-canvas.addEventListener('mousedown',e=>{ isDragging=true; markerTime=pixelToTime(e.offsetX); showTooltip(e); });
-canvas.addEventListener('mousemove',e=>{ if(isDragging){ markerTime=pixelToTime(e.offsetX); showTooltip(e); chart.draw(); }});
-canvas.addEventListener('mouseup',e=>{ if(isDragging){ isDragging=false; hideTooltip(); animateMarkerTo(new Date()); }});
+function pixelToTime(px){return chart.scales.x.getValueForPixel(px);}
+canvas.addEventListener('mousedown',e=>{isDragging=true;markerTime=pixelToTime(e.offsetX);showTooltip(e);});
+canvas.addEventListener('mousemove',e=>{if(isDragging){markerTime=pixelToTime(e.offsetX);showTooltip(e);chart.draw();}});
+canvas.addEventListener('mouseup',e=>{if(isDragging){isDragging=false;hideTooltip();animateMarkerTo(new Date());}});
 
 function showTooltip(e){
   const s=sampleAt(+markerTime);
@@ -164,27 +151,23 @@ function showTooltip(e){
   tooltip.innerHTML=`<strong>${new Date(markerTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
   tooltip.style.left=`${e.offsetX}px`; tooltip.style.top=`${e.offsetY-10}px`;
 }
-function hideTooltip(){ tooltip.style.display='none'; }
-
+function hideTooltip(){tooltip.style.display='none';}
 function animateMarkerTo(target){
-  const start=+markerTime;
-  const end=+target; const t0=performance.now();
+  const start=+markerTime,end=+target,t0=performance.now();
   function step(now){
     const elapsed=now-t0; const frac=Math.min(1,elapsed/800);
     const ease=1-(1-frac)*(1-frac);
-    markerTime=new Date(start + (end-start)*ease);
-    chart.draw();
+    markerTime=new Date(start+(end-start)*ease); chart.draw();
     if(frac<1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
 // Auto-update every minute
-setInterval(()=>{ if(!isDragging) animateMarkerTo(new Date()); }, 60000);
+setInterval(()=>{if(!isDragging) animateMarkerTo(new Date());},60000);
 
 // Initial markerTime
 markerTime=new Date(); chart.draw();
 </script>
-
 </body>
 </html>
