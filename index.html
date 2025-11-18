@@ -18,7 +18,7 @@
 </div>
 
 <script>
-// 24-hour sample data
+// 24-hour hourly sample data
 const forecasts = [
   {"time":"2025-11-18T00:00:00","height":1.2},
   {"time":"2025-11-18T01:00:00","height":1.4},
@@ -46,145 +46,141 @@ const forecasts = [
   {"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
-// Process time, labels, find current hour
-function processData(forecasts) {
-  const labels = [];
-  const heights = [];
-  const now = new Date();
-  let currentIndex = 0;
+// Convert data
+const dataTimes = forecasts.map(f => new Date(f.time).getTime());
+const dataHeights = forecasts.map(f => f.height);
+const labels = forecasts.map(f => new Date(f.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}));
 
-  forecasts.forEach((f, i) => {
-    const t = new Date(f.time);
-    labels.push(t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
-    heights.push(f.height);
-    if (t > now && currentIndex === 0) currentIndex = i;
-  });
-
-  return { labels, heights, currentIndex };
+// Detect high and low tide points
+const highTideIndexes = [];
+const lowTideIndexes = [];
+for(let i=1;i<dataHeights.length-1;i++){
+  if(dataHeights[i] > dataHeights[i-1] && dataHeights[i] > dataHeights[i+1]) highTideIndexes.push(i);
+  if(dataHeights[i] < dataHeights[i-1] && dataHeights[i] < dataHeights[i+1]) lowTideIndexes.push(i);
 }
 
-let dragIndex = null;        // the index used during drag
-let isDragging = false;      // dragging state
-
-function drawCustomTooltip(chart, index, heights) {
-  const ctx = chart.ctx;
-  const x = chart.scales.x.getPixelForValue(index);
-  const y = chart.scales.y.getPixelForValue(heights[index]);
-
-  const rising = heights[index+1] > heights[index] ? "Rising" :
-                 heights[index+1] < heights[index] ? "Falling" : "Steady";
-
-  const text = `${heights[index].toFixed(2)} m (${rising})`;
-
-  ctx.save();
-  ctx.fillStyle = "white";
-  ctx.strokeStyle = "black";
-  ctx.lineWidth = 1;
-
-  // Tooltip box
-  ctx.beginPath();
-  ctx.rect(x + 10, y - 20, ctx.measureText(text).width + 12, 20);
-  ctx.fill();
-  ctx.stroke();
-
-  // Text
-  ctx.fillStyle = "black";
-  ctx.fillText(text, x + 16, y - 6);
-
-  ctx.restore();
+// Interpolation
+function interpHeight(time){
+  if(time <= dataTimes[0]) return dataHeights[0];
+  if(time >= dataTimes[dataTimes.length-1]) return dataHeights[dataHeights.length-1];
+  let i = 0;
+  while(time > dataTimes[i+1]) i++;
+  const t0 = dataTimes[i], t1 = dataTimes[i+1];
+  const h0 = dataHeights[i], h1 = dataHeights[i+1];
+  const f = (time - t0)/(t1 - t0);
+  return h0 + f*(h1 - h0);
 }
 
-function drawChart(labels, heights, currentIndex) {
-  const ctx = document.getElementById('tideChart').getContext('2d');
+// Rising/Falling
+function risingFalling(time){
+  const nextMin = 60000;
+  const hNow = interpHeight(time);
+  const hNext = interpHeight(time+nextMin);
+  if(hNext > hNow) return "Rising";
+  if(hNext < hNow) return "Falling";
+  return "Steady";
+}
 
-  const tideChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Tide Height (m)',
-        data: heights,
-        fill: true,
-        borderColor: '#007bff',
-        backgroundColor: 'rgba(0,123,255,0.2)',
-        tension: 0.3,
-        pointRadius: 3
-      }]
-    },
-    options: {
-      responsive: true,
-      animation: false,
-      plugins: { tooltip: { enabled: false }, legend: { display: false } },
-      scales: {
-        x: { title: { display: true, text: 'Time' } },
-        y: {
-          title: { display: true, text: 'Height (m)' },
-          suggestedMin: Math.min(...heights)-0.5,
-          suggestedMax: Math.max(...heights)+0.5
+const ctx = document.getElementById('tideChart').getContext('2d');
+
+const tideChart = new Chart(ctx,{
+  type:'line',
+  data:{
+    labels: labels,
+    datasets:[
+      {
+        label:'Tide Height (m)',
+        data:dataHeights,
+        borderColor:'#007bff',
+        backgroundColor:'rgba(0,123,255,0.2)',
+        fill:true,
+        tension:0.3,
+        pointRadius:function(ctx){
+          if(highTideIndexes.includes(ctx.dataIndex)) return 7;
+          if(lowTideIndexes.includes(ctx.dataIndex)) return 7;
+          return 3;
+        },
+        pointBackgroundColor:function(ctx){
+          if(highTideIndexes.includes(ctx.dataIndex)) return 'orange';
+          if(lowTideIndexes.includes(ctx.dataIndex)) return 'blue';
+          return '#007bff';
         }
       }
+    ]
+  },
+  options:{
+    responsive:true,
+    animation:false,
+    plugins:{tooltip:{enabled:false}, legend:{display:false}},
+    scales:{
+      x:{title:{display:true,text:'Time'}},
+      y:{
+        title:{display:true,text:'Height (m)'},
+        suggestedMin: Math.min(...dataHeights)-0.5,
+        suggestedMax: Math.max(...dataHeights)+0.5
+      }
     }
-  });
-
-  const canvas = tideChart.canvas;
-  const rect = canvas.getBoundingClientRect();
-
-  // Draw everything including tooltip + red line
-  function redraw() {
-    tideChart.update();
-
-    const index = isDragging ? dragIndex : currentIndex;
-    const xPixel = tideChart.scales.x.getPixelForValue(index);
-
-    const ctx2 = tideChart.ctx;
-    ctx2.save();
-    ctx2.beginPath();
-    ctx2.moveTo(xPixel, tideChart.scales.y.top);
-    ctx2.lineTo(xPixel, tideChart.scales.y.bottom);
-    ctx2.strokeStyle = 'red';
-    ctx2.lineWidth = 2;
-    ctx2.stroke();
-    ctx2.restore();
-
-    drawCustomTooltip(tideChart, index, heights);
   }
+});
 
-  redraw();
-  tideChart.options.animation = false;
+let dragging=false;
+let currentTime = new Date().getTime();
 
-  // Dragging behaviour
-  canvas.addEventListener('mousedown', (e) => {
-    isDragging = true;
-  });
+function drawRedLine(time){
+  tideChart.update();
+  const ctx2 = tideChart.ctx;
+  const xPixel = tideChart.scales.x.getPixelForValue(
+    tideChart.scales.x.getValueForPixel(0) + (time-dataTimes[0])/(dataTimes[dataTimes.length-1]-dataTimes[0])*(tideChart.scales.x.right-tideChart.scales.x.left)
+  );
+  const h = interpHeight(time);
+  const rf = risingFalling(time);
 
-  canvas.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
+  // Red line
+  ctx2.save();
+  ctx2.beginPath();
+  ctx2.moveTo(xPixel,tideChart.scales.y.top);
+  ctx2.lineTo(xPixel,tideChart.scales.y.bottom);
+  ctx2.strokeStyle='red';
+  ctx2.lineWidth=2;
+  ctx2.stroke();
 
-    const x = e.clientX - rect.left;
-    let nearest = tideChart.scales.x.getValueForPixel(x);
-
-    nearest = Math.round(nearest);
-    nearest = Math.max(0, Math.min(nearest, heights.length - 1));
-
-    dragIndex = nearest;
-    redraw();
-  });
-
-  canvas.addEventListener('mouseup', () => {
-    isDragging = false;
-    redraw(); // return to currentIndex
-  });
-
-  canvas.addEventListener('mouseleave', () => {
-    isDragging = false;
-    redraw(); // return
-  });
+  // Tooltip
+  const text = h.toFixed(2)+" m ("+rf+")";
+  ctx2.fillStyle='white';
+  ctx2.strokeStyle='black';
+  ctx2.lineWidth=1;
+  ctx2.beginPath();
+  ctx2.rect(xPixel+10,tideChart.scales.y.getPixelForValue(h)-20,ctx2.measureText(text).width+12,20);
+  ctx2.fill();
+  ctx2.stroke();
+  ctx2.fillStyle='black';
+  ctx2.fillText(text,xPixel+16,tideChart.scales.y.getPixelForValue(h)-6);
+  ctx2.restore();
 }
 
-const { labels, heights, currentIndex } = processData(forecasts);
-drawChart(labels, heights, currentIndex);
+// Initial draw
+drawRedLine(currentTime);
 
-</script>
+// Dragging
+tideChart.canvas.addEventListener('mousedown',()=>{dragging=true;});
+tideChart.canvas.addEventListener('mouseup',()=>{
+  dragging=false;
+  currentTime=new Date().getTime();
+  drawRedLine(currentTime);
+});
+tideChart.canvas.addEventListener('mousemove',(e)=>{
+  if(!dragging) return;
+  const rect = tideChart.canvas.getBoundingClientRect();
+  const x = e.clientX-rect.left;
+  const value = tideChart.scales.x.getValueForPixel(x);
+  const time = dataTimes[0]+value/(tideChart.scales.x.right-tideChart.scales.x.left)*(dataTimes[dataTimes.length-1]-dataTimes[0]);
+  drawRedLine(time);
+});
 
-</body>
-</html>
+// Update red line every minute
+setInterval(()=>{
+  if(!dragging){
+    currentTime=new Date().getTime();
+    drawRedLine(currentTime);
+  }
+},60000);
