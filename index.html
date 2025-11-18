@@ -72,7 +72,7 @@ function sampleAt(timeMs){
   return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:0};
 }
 
-// Find high/low tide points
+// Detect high/low tide points
 function findHighLow(data){
   const result = [];
   for(let i=1;i<data.length-1;i++){
@@ -127,9 +127,14 @@ const verticalLinePlugin = {
     });
     ctx.restore();
 
+    // Determine rising/falling trend
+    let trend = 'Stable';
+    if(s.slope > 0.01) trend = 'Rising';
+    else if(s.slope < -0.01) trend = 'Falling';
+
     // Tooltip close to line
     tooltip.style.display='block';
-    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m`;
+    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
     tooltip.style.left = x + 'px';
     tooltip.style.top = y - 35 + 'px';
 
