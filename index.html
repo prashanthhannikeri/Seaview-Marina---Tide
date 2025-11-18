@@ -13,7 +13,7 @@
   .tooltip-box {
     position:absolute; pointer-events:none; background:rgba(0,0,0,0.8);
     color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none;
-    transform:translate(-50%, -110%);
+    transform:translate(-50%, -100%);
   }
   table { width:90%; max-width:900px; margin:20px auto; border-collapse:collapse; }
   th, td { padding:6px; border-bottom:1px solid #eee; text-align:center; }
@@ -73,13 +73,24 @@ function sampleAt(timeMs){
   return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:0};
 }
 
+// Detect high/low tide points
+function findHighLow(data){
+  const result = [];
+  for(let i=1;i<data.length-1;i++){
+    if(data[i].y>data[i-1].y && data[i].y>data[i+1].y) result.push({...data[i],type:'high'});
+    else if(data[i].y<data[i-1].y && data[i].y<data[i+1].y) result.push({...data[i],type:'low'});
+  }
+  return result;
+}
+const highLowPoints = findHighLow(dataPoints);
+
 // Build table
 dataPoints.forEach(dp=>{
   const t = dp.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td class="trend"> </td></tr>`;
 });
 
-// Vertical line plugin
+// Vertical line plugin with high/low markers
 const verticalLinePlugin = {
   id:'verticalLinePlugin',
   afterDraw(chart){
@@ -87,6 +98,8 @@ const verticalLinePlugin = {
     if(!xScale||!yScale) return;
     const ctx = chart.ctx;
     const x = xScale.getPixelForValue(markerTime);
+
+    // Red vertical line
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(x,yScale.top);
@@ -95,20 +108,32 @@ const verticalLinePlugin = {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Circle at height
+    // Red circle at marker
     const s = sampleAt(+markerTime);
     const y = yScale.getPixelForValue(s.y);
     ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+
+    // High/low tide markers
+    highLowPoints.forEach(p=>{
+      const px = xScale.getPixelForValue(p.x);
+      const py = yScale.getPixelForValue(p.y);
+      ctx.fillStyle = (p.type==='high')?'green':'orange';
+      ctx.beginPath(); ctx.arc(px,py,6,0,Math.PI*2); ctx.fill();
+      ctx.font='12px sans-serif';
+      ctx.fillStyle='#000';
+      ctx.textAlign='center';
+      ctx.fillText(p.type==='high'?'High':'Low', px, py-10);
+    });
     ctx.restore();
 
-    // Tooltip with trend
+    // Tooltip close to line
     let trend = 'Stable';
     if(s.slope > 0.01) trend = 'Rising';
     else if(s.slope < -0.01) trend = 'Falling';
     tooltip.style.display='block';
     tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
-    tooltip.style.left = x + chart.canvas.getBoundingClientRect().left - chart.canvas.offsetLeft + 'px';
-    tooltip.style.top = y + chart.canvas.getBoundingClientRect().top - chart.canvas.offsetTop - 20 + 'px';
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y - 35 + 'px';
 
     // Highlight table row
     const rows = tbody.querySelectorAll('tr');
@@ -158,7 +183,6 @@ canvas.addEventListener('mousemove', e=>{if(isDragging){markerTime=pixelToTime(e
 canvas.addEventListener('mouseup', e=>{
   if(isDragging){
     isDragging=false;
-    // Animate back to current time
     const start = +markerTime;
     const end = +new Date();
     const t0 = performance.now();
@@ -174,7 +198,7 @@ canvas.addEventListener('mouseup', e=>{
   }
 });
 
-// Auto-update every minute if not dragging
+// Auto-update every minute
 setInterval(()=>{if(!isDragging) markerTime=new Date(); chart.draw();},60000);
 
 markerTime = new Date(); chart.draw();
