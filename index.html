@@ -15,6 +15,10 @@
     color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none;
     transform:translate(-50%, -110%);
   }
+  table { width:90%; max-width:900px; margin:20px auto; border-collapse:collapse; }
+  th, td { padding:6px; border-bottom:1px solid #eee; text-align:center; }
+  th { background:#f7fbff; color:#004080; }
+  .highlight { background:rgba(255,0,0,0.2); font-weight:600; }
 </style>
 </head>
 <body>
@@ -24,6 +28,10 @@
   <canvas id="tideChart"></canvas>
   <div id="lineTooltip" class="tooltip-box"></div>
 </div>
+<table id="tideTable">
+  <thead><tr><th>Time</th><th>Height (m)</th><th>Trend</th></tr></thead>
+  <tbody></tbody>
+</table>
 
 <script>
 // Sample 24h tide data
@@ -45,6 +53,7 @@ const forecasts = [
 const dataPoints = forecasts.map(f=>({x:new Date(f.time),y:f.height}));
 
 const tooltip = document.getElementById('lineTooltip');
+const tbody = document.querySelector('#tideTable tbody');
 let markerTime = new Date();
 let isDragging = false;
 
@@ -63,6 +72,12 @@ function sampleAt(timeMs){
   }
   return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:0};
 }
+
+// Build table
+dataPoints.forEach(dp=>{
+  const t = dp.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td class="trend"> </td></tr>`;
+});
 
 // Vertical line plugin
 const verticalLinePlugin = {
@@ -94,6 +109,18 @@ const verticalLinePlugin = {
     tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
     tooltip.style.left = x + chart.canvas.getBoundingClientRect().left - chart.canvas.offsetLeft + 'px';
     tooltip.style.top = y + chart.canvas.getBoundingClientRect().top - chart.canvas.offsetTop - 20 + 'px';
+
+    // Highlight table row
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(r=>r.classList.remove('highlight'));
+    let closestIndex = 0;
+    let minDiff = Infinity;
+    dataPoints.forEach((dp,i)=>{
+      const diff = Math.abs(+dp.x - +markerTime);
+      if(diff<minDiff){ minDiff=diff; closestIndex=i; }
+    });
+    rows[closestIndex].classList.add('highlight');
+    rows[closestIndex].querySelector('.trend').textContent = trend;
   }
 };
 
