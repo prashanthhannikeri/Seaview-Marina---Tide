@@ -13,7 +13,7 @@
     background:#fff; 
     border-radius:6px; 
     display:block; 
-    height:400px; /* increased height */
+    height:400px;
     width:100%; 
   }
   .tooltip-box {
@@ -26,11 +26,16 @@
   th { background:#f7fbff; color:#004080; }
   .highlight { background:rgba(255,0,0,0.2); font-weight:600; }
   #toggleTableBtn { display:block; margin:15px auto; padding:8px 12px; font-size:14px; cursor:pointer; }
+  #dateSelector { display:block; margin:10px auto; padding:6px 10px; font-size:14px; }
 </style>
 </head>
 <body>
 
 <h1>Seaview Marina Tide Forecast</h1>
+
+<!-- Date picker -->
+<input type="date" id="dateSelector" />
+
 <div id="chartWrap">
   <canvas id="tideChart"></canvas>
   <div id="lineTooltip" class="tooltip-box"></div>
@@ -46,45 +51,24 @@
 </div>
 
 <script>
-// Sample 24h tide data
-const forecasts = [
-  {"time":"2025-11-18T00:00:00","height":1.2},{"time":"2025-11-18T01:00:00","height":1.4},
-  {"time":"2025-11-18T02:00:00","height":1.6},{"time":"2025-11-18T03:00:00","height":1.8},
-  {"time":"2025-11-18T04:00:00","height":1.7},{"time":"2025-11-18T05:00:00","height":1.5},
-  {"time":"2025-11-18T06:00:00","height":1.3},{"time":"2025-11-18T07:00:00","height":1.2},
-  {"time":"2025-11-18T08:00:00","height":1.4},{"time":"2025-11-18T09:00:00","height":1.6},
-  {"time":"2025-11-18T10:00:00","height":1.9},{"time":"2025-11-18T11:00:00","height":2.1},
-  {"time":"2025-11-18T12:00:00","height":2.0},{"time":"2025-11-18T13:00:00","height":1.8},
-  {"time":"2025-11-18T14:00:00","height":1.6},{"time":"2025-11-18T15:00:00","height":1.5},
-  {"time":"2025-11-18T16:00:00","height":1.4},{"time":"2025-11-18T17:00:00","height":1.3},
-  {"time":"2025-11-18T18:00:00","height":1.2},{"time":"2025-11-18T19:00:00","height":1.3},
-  {"time":"2025-11-18T20:00:00","height":1.5},{"time":"2025-11-18T21:00:00","height":1.7},
-  {"time":"2025-11-18T22:00:00","height":1.6},{"time":"2025-11-18T23:00:00","height":1.4}
-];
+// Example tide data generator for a selected day (replace with real API later)
+function generateTideData(dateStr) {
+  const data = [];
+  for (let h=0; h<24; h++){
+    const t = new Date(`${dateStr}T${String(h).padStart(2,'0')}:00:00`);
+    const height = 1.2 + 0.8 * Math.sin((h/24)*2*Math.PI); // simple sine wave for demo
+    data.push({x:t, y:parseFloat(height.toFixed(2))});
+  }
+  return data;
+}
 
-const dataPoints = forecasts.map(f=>({x:new Date(f.time),y:f.height}));
+let dataPoints = generateTideData(new Date().toISOString().slice(0,10));
 const tooltip = document.getElementById('lineTooltip');
 const tbody = document.querySelector('#tideTable tbody');
 let markerTime = new Date();
 let isDragging = false;
 
-// Linear interpolation with slope
-function sampleAt(timeMs){
-  if(timeMs <= +dataPoints[0].x) return {x:dataPoints[0].x,y:dataPoints[0].y,slope:dataPoints[1].y-dataPoints[0].y};
-  if(timeMs >= +dataPoints[dataPoints.length-1].x) return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:dataPoints[dataPoints.length-1].y-dataPoints[dataPoints.length-2].y};
-  for(let i=0;i<dataPoints.length-1;i++){
-    const t0 = +dataPoints[i].x, t1 = +dataPoints[i+1].x;
-    if(timeMs >= t0 && timeMs <= t1){
-      const ratio = (timeMs-t0)/(t1-t0);
-      const y = dataPoints[i].y + (dataPoints[i+1].y - dataPoints[i].y)*ratio;
-      const slope = (dataPoints[i+1].y - dataPoints[i].y)/((t1-t0)/3600000);
-      return {x:new Date(timeMs),y,slope};
-    }
-  }
-  return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:0};
-}
-
-// Detect high/low tide points
+// High/Low detection
 function findHighLow(data){
   const result = [];
   for(let i=1;i<data.length-1;i++){
@@ -93,17 +77,23 @@ function findHighLow(data){
   }
   return result;
 }
-const highLowPoints = findHighLow(dataPoints);
 
-// Build table showing only high/low in trend
-dataPoints.forEach(dp=>{
-  const t = dp.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  const trendPoint = highLowPoints.find(p=>+p.x===+dp.x);
-  const trendText = trendPoint ? (trendPoint.type==='high'?'High':'Low') : '';
-  tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td class="trend">${trendText}</td></tr>`;
-});
+// Build table
+function buildTable(data){
+  tbody.innerHTML = '';
+  const highLowPoints = findHighLow(data);
+  data.forEach(dp=>{
+    const t = dp.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const trendPoint = highLowPoints.find(p=>+p.x===+dp.x);
+    const trendText = trendPoint ? (trendPoint.type==='high'?'High':'Low') : '';
+    tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td>${trendText}</td></tr>`;
+  });
+  return highLowPoints;
+}
 
-// Vertical line plugin with high/low markers
+let highLowPoints = buildTable(dataPoints);
+
+// Vertical line plugin
 const verticalLinePlugin = {
   id:'verticalLinePlugin',
   afterDraw(chart){
@@ -112,7 +102,7 @@ const verticalLinePlugin = {
     const ctx = chart.ctx;
     const x = xScale.getPixelForValue(markerTime);
 
-    // Red vertical line
+    // Red line
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(x,yScale.top);
@@ -121,12 +111,12 @@ const verticalLinePlugin = {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Red circle at marker
-    const s = sampleAt(+markerTime);
+    // Marker circle
+    const s = sampleAt(markerTime);
     const y = yScale.getPixelForValue(s.y);
     ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
 
-    // High/low tide markers
+    // High/Low markers
     highLowPoints.forEach(p=>{
       const px = xScale.getPixelForValue(p.x);
       const py = yScale.getPixelForValue(p.y);
@@ -139,12 +129,12 @@ const verticalLinePlugin = {
     });
     ctx.restore();
 
-    // Determine rising/falling trend
+    // Trend
     let trend = 'Stable';
     if(s.slope > 0.01) trend = 'Rising';
     else if(s.slope < -0.01) trend = 'Falling';
 
-    // Tooltip close to line
+    // Tooltip
     tooltip.style.display='block';
     tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
     tooltip.style.left = x + 'px';
@@ -163,25 +153,33 @@ const verticalLinePlugin = {
   }
 };
 
+// Linear interpolation
+function sampleAt(time){
+  const timeMs = +time;
+  if(timeMs <= +dataPoints[0].x) return {x:dataPoints[0].x,y:dataPoints[0].y,slope:dataPoints[1].y-dataPoints[0].y};
+  if(timeMs >= +dataPoints[dataPoints.length-1].x) return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:dataPoints[dataPoints.length-1].y-dataPoints[dataPoints.length-2].y};
+  for(let i=0;i<dataPoints.length-1;i++){
+    const t0 = +dataPoints[i].x, t1 = +dataPoints[i+1].x;
+    if(timeMs>=t0 && timeMs<=t1){
+      const ratio = (timeMs-t0)/(t1-t0);
+      const y = dataPoints[i].y + (dataPoints[i+1].y - dataPoints[i].y)*ratio;
+      const slope = (dataPoints[i+1].y - dataPoints[i].y)/((t1-t0)/3600000);
+      return {x:new Date(timeMs),y,slope};
+    }
+  }
+}
+
 // Chart
 const ctx = document.getElementById('tideChart').getContext('2d');
 const chart = new Chart(ctx,{
   type:'line',
-  data:{datasets:[{
-    label:'Tide Height (m)',
-    data:dataPoints,
-    borderColor:'#007bff',
-    backgroundColor:'rgba(0,123,255,0.2)',
-    tension:0.3,
-    fill:true,
-    pointRadius:3
-  }]},
+  data:{datasets:[{label:'Tide Height (m)', data:dataPoints, borderColor:'#007bff', backgroundColor:'rgba(0,123,255,0.2)', tension:0.3, fill:true, pointRadius:3}]},
   options:{
     responsive:true,
     maintainAspectRatio:false,
     scales:{
       x:{type:'time', time:{unit:'hour', tooltipFormat:'HH:mm'}, title:{display:true,text:'Time'}},
-      y:{title:{display:true,text:'Height (m)'}}
+      y:{title:{display:true,text:'Height (m)'}, min:0, max:2.5}
     },
     plugins:{legend:{display:false}, tooltip:{enabled:false}}
   },
@@ -191,41 +189,33 @@ const chart = new Chart(ctx,{
 // Drag logic
 const canvas = chart.canvas;
 function pixelToTime(px){ return chart.scales.x.getValueForPixel(px); }
-
 canvas.addEventListener('mousedown', e=>{isDragging=true; markerTime=pixelToTime(e.offsetX); chart.draw();});
 canvas.addEventListener('mousemove', e=>{if(isDragging){markerTime=pixelToTime(e.offsetX); chart.draw();}});
 canvas.addEventListener('mouseup', e=>{
-  if(isDragging){
-    isDragging=false;
-    const start = +markerTime;
-    const end = +new Date();
-    const t0 = performance.now();
-    function step(now){
-      const elapsed = now-t0;
-      const frac = Math.min(1, elapsed/800);
-      const ease = 1-(1-frac)*(1-frac);
-      markerTime = new Date(start + (end-start)*ease);
-      chart.draw();
-      if(frac<1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
+  if(isDragging){isDragging=false; const start=+markerTime; const end=+new Date(); const t0=performance.now();
+    function step(now){ const elapsed=now-t0; const frac=Math.min(1,elapsed/800); const ease=1-(1-frac)*(1-frac);
+      markerTime = new Date(start + (end-start)*ease); chart.draw(); if(frac<1) requestAnimationFrame(step);}
+    requestAnimationFrame(step);}
 });
-
-// Auto-update every minute
 setInterval(()=>{if(!isDragging) markerTime=new Date(); chart.draw();},60000);
 
-// Collapsible table logic
+// Collapsible table
 const toggleBtn = document.getElementById('toggleTableBtn');
 const tableContainer = document.getElementById('tableContainer');
 toggleBtn.addEventListener('click', ()=>{
-  if(tableContainer.style.display === 'none'){
-    tableContainer.style.display = 'block';
-    toggleBtn.textContent = 'Hide Tide Table ▲';
-  } else {
-    tableContainer.style.display = 'none';
-    toggleBtn.textContent = 'Show Tide Table ▼';
-  }
+  if(tableContainer.style.display==='none'){ tableContainer.style.display='block'; toggleBtn.textContent='Hide Tide Table ▲'; }
+  else{ tableContainer.style.display='none'; toggleBtn.textContent='Show Tide Table ▼'; }
+});
+
+// Date picker
+const dateSelector = document.getElementById('dateSelector');
+dateSelector.value = new Date().toISOString().slice(0,10);
+dateSelector.addEventListener('change', ()=>{
+  dataPoints = generateTideData(dateSelector.value);
+  highLowPoints = buildTable(dataPoints);
+  markerTime = new Date();
+  chart.data.datasets[0].data = dataPoints;
+  chart.draw();
 });
 
 markerTime = new Date(); chart.draw();
