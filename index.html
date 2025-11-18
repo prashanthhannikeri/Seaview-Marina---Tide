@@ -4,15 +4,14 @@
 <meta charset="UTF-8">
 <title>Seaview Marina Tide Forecast</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <style>
   body { font-family: sans-serif; background: #f0f8ff; margin: 20px; }
   h1 { text-align: center; color: #004080; }
   #chartContainer { width: 90%; max-width: 900px; margin: 30px auto; }
-  #dragInfo {
+  #infoBox {
     text-align: center;
-    font-size: 18px;
     margin-top: 10px;
+    font-size: 18px;
     color: #b30000;
     font-weight: bold;
   }
@@ -24,10 +23,10 @@
 <div id="chartContainer">
   <canvas id="tideChart"></canvas>
 </div>
-<div id="dragInfo"></div>
+<div id="infoBox"></div>
 
 <script>
-// ------------------ SAMPLE 24-HOUR DATA ------------------
+// ------------------ ORIGINAL 24-HOUR SAMPLE DATA ------------------
 const forecasts = [
   {"time":"2025-11-18T00:00:00","height":1.2},
   {"time":"2025-11-18T01:00:00","height":1.4},
@@ -73,123 +72,93 @@ function processData(forecasts) {
 
 const { labels, heights, currentIndex } = processData(forecasts);
 
-// -------- Create Chart --------
-const ctx = document.getElementById('tideChart').getContext('2d');
+function drawChart(labels, heights, currentIndex) {
+  const ctx = document.getElementById('tideChart').getContext('2d');
 
-const tideChart = new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels: labels,
-    datasets: [{
-      label: 'Tide Height (m)',
-      data: heights,
-      borderColor: '#007bff',
-      backgroundColor: 'rgba(0,123,255,0.2)',
-      tension: 0.3,
-      fill: true,
-      pointRadius: 0
-    }]
-  },
-  options: {
-    responsive: true,
-    animation: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: false  // We use our own custom tooltip
-      }
+  const tideChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Tide Height (m)',
+        data: heights,
+        fill: true,
+        borderColor: '#007bff',
+        backgroundColor: 'rgba(0,123,255,0.2)',
+        tension: 0.3,
+        pointRadius: 3
+      }]
     },
-    scales: {
-      x: { title: { display: true, text: "Time" } },
-      y: {
-        title: { display: true, text: "Height (m)" },
-        suggestedMin: Math.min(...heights) - 0.5,
-        suggestedMax: Math.max(...heights) + 0.5
-      }
-    },
-    interaction: { mode: "nearest", intersect: false }
+    options: {
+      responsive: true,
+      plugins: { legend:{display:false}, tooltip:{enabled:false} },
+      scales: {
+        x: { title: { display:true, text:'Time' } },
+        y: {
+          title: { display:true, text:'Height (m)' },
+          suggestedMin: Math.min(...heights)-0.5,
+          suggestedMax: Math.max(...heights)+0.5
+        }
+      },
+      animation:false
+    }
+  });
+
+  // ---------------- DRAW RED LINE FUNCTION ----------------
+  function drawRedLine(index) {
+    const chart = tideChart;
+    chart.update();
+    const ctx2 = chart.ctx;
+    const xPixel = chart.scales.x.getPixelForValue(index);
+
+    ctx2.save();
+    ctx2.beginPath();
+    ctx2.moveTo(xPixel, chart.scales.y.top);
+    ctx2.lineTo(xPixel, chart.scales.y.bottom);
+    ctx2.strokeStyle = 'red';
+    ctx2.lineWidth = 2;
+    ctx2.stroke();
+    ctx2.restore();
   }
-});
 
-// ------------------ CUSTOM RED LINE + DRAG LOGIC ------------------
-let dragging = false;
-let dragIndex = currentIndex;
+  drawRedLine(currentIndex);
 
-const dragInfo = document.getElementById("dragInfo");
+  // ---------------- DRAGGING LOGIC ----------------
+  const canvas = tideChart.canvas;
+  const infoBox = document.getElementById("infoBox");
 
-function drawRedLine(index) {
-  const chart = tideChart;
-  const ctx = chart.ctx;
-  const xPixel = chart.scales.x.getPixelForValue(index);
+  let dragging = false;
 
-  chart.update();
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(xPixel, chart.scales.y.top);
-  ctx.lineTo(xPixel, chart.scales.y.bottom);
-  ctx.strokeStyle = "red";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function updateDragDisplay(index) {
-  const h = heights[index];
-  const rising = heights[index+1] > h ? "Rising" : "Falling";
-  dragInfo.innerHTML = `${h.toFixed(2)} m — ${rising}`;
-}
-
-function resetToCurrentTime() {
-  dragIndex = currentIndex;
-  dragInfo.innerHTML = "";
-  drawRedLine(dragIndex);
-}
-
-// ------------------ Mouse Events ------------------
-document.getElementById("tideChart").addEventListener("mousedown", (e) => {
-  dragging = true;
-});
-
-document.addEventListener("mouseup", () => {
-  if (dragging) {
+  canvas.addEventListener("mousedown", () => dragging = true);
+  canvas.addEventListener("mouseup", () => {
     dragging = false;
-    resetToCurrentTime();
-  }
-});
+    infoBox.innerHTML = "";
+    drawRedLine(currentIndex); // snap back to NOW
+  });
 
-document.addEventListener("mousemove", (e) => {
-  if (!dragging) return;
+  canvas.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
 
-  const rect = tideChart.canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const index = Math.round(tideChart.scales.x.getValueForPixel(x));
 
-  const scale = tideChart.scales.x;
-  const index = Math.round(scale.getValueForPixel(x));
+    if (index >= 0 && index < heights.length) {
+      const h = heights[index];
+      const rising = heights[index+1] > h ? "Rising" : "Falling";
 
-  if (index >= 0 && index < heights.length) {
-    dragIndex = index;
-    drawRedLine(index);
-    updateDragDisplay(index);
-  }
-});
+      infoBox.innerHTML = `${h.toFixed(2)} m — ${rising}`;
 
-// ------------ Initial red line ------------
-drawRedLine(currentIndex);
+      drawRedLine(index);
+    }
+  });
 
-// ------------ Update red line every minute ------------
-setInterval(() => {
-  if (!dragging) {
-    const now = new Date();
-    let newIndex = currentIndex;
-    forecasts.forEach((f, i) => {
-      if (new Date(f.time) < now) newIndex = i;
-    });
-    currentIndex = newIndex;
-    drawRedLine(currentIndex);
-  }
-}, 60000);
+  return tideChart;
+}
+
+drawChart(labels, heights, currentIndex);
 
 </script>
+
 </body>
 </html>
