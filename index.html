@@ -49,9 +49,8 @@ const forecasts = [
 // Convert data
 const dataTimes = forecasts.map(f => new Date(f.time).getTime());
 const dataHeights = forecasts.map(f => f.height);
-const labels = forecasts.map(f => new Date(f.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}));
 
-// Detect high and low tide points
+// Detect high/low tide indexes
 const highTideIndexes = [];
 const lowTideIndexes = [];
 for(let i=1;i<dataHeights.length-1;i++){
@@ -59,16 +58,15 @@ for(let i=1;i<dataHeights.length-1;i++){
   if(dataHeights[i] < dataHeights[i-1] && dataHeights[i] < dataHeights[i+1]) lowTideIndexes.push(i);
 }
 
-// Interpolation
+// Interpolate height
 function interpHeight(time){
   if(time <= dataTimes[0]) return dataHeights[0];
   if(time >= dataTimes[dataTimes.length-1]) return dataHeights[dataHeights.length-1];
-  let i = 0;
-  while(time > dataTimes[i+1]) i++;
-  const t0 = dataTimes[i], t1 = dataTimes[i+1];
-  const h0 = dataHeights[i], h1 = dataHeights[i+1];
-  const f = (time - t0)/(t1 - t0);
-  return h0 + f*(h1 - h0);
+  let i=0;
+  while(time>dataTimes[i+1]) i++;
+  const t0=dataTimes[i], t1=dataTimes[i+1];
+  const h0=dataHeights[i], h1=dataHeights[i+1];
+  return h0 + (h1-h0)*(time-t0)/(t1-t0);
 }
 
 // Rising/Falling
@@ -81,39 +79,44 @@ function risingFalling(time){
   return "Steady";
 }
 
+// Create chart with X-axis as time (linear)
 const ctx = document.getElementById('tideChart').getContext('2d');
-
 const tideChart = new Chart(ctx,{
   type:'line',
   data:{
-    labels: labels,
-    datasets:[
-      {
-        label:'Tide Height (m)',
-        data:dataHeights,
-        borderColor:'#007bff',
-        backgroundColor:'rgba(0,123,255,0.2)',
-        fill:true,
-        tension:0.3,
-        pointRadius:function(ctx){
-          if(highTideIndexes.includes(ctx.dataIndex)) return 7;
-          if(lowTideIndexes.includes(ctx.dataIndex)) return 7;
-          return 3;
-        },
-        pointBackgroundColor:function(ctx){
-          if(highTideIndexes.includes(ctx.dataIndex)) return 'orange';
-          if(lowTideIndexes.includes(ctx.dataIndex)) return 'blue';
-          return '#007bff';
-        }
+    labels: forecasts.map(f=>new Date(f.time)),
+    datasets:[{
+      label:'Tide Height (m)',
+      data: forecasts.map(f=>({x:new Date(f.time).getTime(),y:f.height})),
+      borderColor:'#007bff',
+      backgroundColor:'rgba(0,123,255,0.2)',
+      fill:true,
+      tension:0.3,
+      pointRadius: (ctx)=>{
+        const i = ctx.dataIndex;
+        if(highTideIndexes.includes(i)) return 7;
+        if(lowTideIndexes.includes(i)) return 7;
+        return 3;
+      },
+      pointBackgroundColor: (ctx)=>{
+        const i = ctx.dataIndex;
+        if(highTideIndexes.includes(i)) return 'orange';
+        if(lowTideIndexes.includes(i)) return 'blue';
+        return '#007bff';
       }
-    ]
+    }]
   },
   options:{
     responsive:true,
     animation:false,
+    parsing:false,
     plugins:{tooltip:{enabled:false}, legend:{display:false}},
     scales:{
-      x:{title:{display:true,text:'Time'}},
+      x:{
+        type:'time',
+        time:{unit:'hour', displayFormats:{hour:'HH:mm'}},
+        title:{display:true,text:'Time'}
+      },
       y:{
         title:{display:true,text:'Height (m)'},
         suggestedMin: Math.min(...dataHeights)-0.5,
@@ -129,9 +132,9 @@ let currentTime = new Date().getTime();
 function drawRedLine(time){
   tideChart.update();
   const ctx2 = tideChart.ctx;
-  const xPixel = tideChart.scales.x.getPixelForValue(
-    tideChart.scales.x.getValueForPixel(0) + (time-dataTimes[0])/(dataTimes[dataTimes.length-1]-dataTimes[0])*(tideChart.scales.x.right-tideChart.scales.x.left)
-  );
+  ctx2.font = "12px sans-serif";
+
+  const xPixel = tideChart.scales.x.getPixelForValue(time);
   const h = interpHeight(time);
   const rf = risingFalling(time);
 
@@ -146,11 +149,12 @@ function drawRedLine(time){
 
   // Tooltip
   const text = h.toFixed(2)+" m ("+rf+")";
+  const textWidth = ctx2.measureText(text).width;
   ctx2.fillStyle='white';
   ctx2.strokeStyle='black';
   ctx2.lineWidth=1;
   ctx2.beginPath();
-  ctx2.rect(xPixel+10,tideChart.scales.y.getPixelForValue(h)-20,ctx2.measureText(text).width+12,20);
+  ctx2.rect(xPixel+10,tideChart.scales.y.getPixelForValue(h)-20,textWidth+12,20);
   ctx2.fill();
   ctx2.stroke();
   ctx2.fillStyle='black';
@@ -172,12 +176,11 @@ tideChart.canvas.addEventListener('mousemove',(e)=>{
   if(!dragging) return;
   const rect = tideChart.canvas.getBoundingClientRect();
   const x = e.clientX-rect.left;
-  const value = tideChart.scales.x.getValueForPixel(x);
-  const time = dataTimes[0]+value/(tideChart.scales.x.right-tideChart.scales.x.left)*(dataTimes[dataTimes.length-1]-dataTimes[0]);
+  const time = tideChart.scales.x.getValueForPixel(x);
   drawRedLine(time);
 });
 
-// Update red line every minute
+// Update every minute
 setInterval(()=>{
   if(!dragging){
     currentTime=new Date().getTime();
