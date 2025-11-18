@@ -26,7 +26,7 @@
 <div id="infoBox"></div>
 
 <script>
-// ------------------ ORIGINAL 24-HOUR SAMPLE DATA ------------------
+// ------------------ ORIGINAL SAMPLE DATA ------------------
 const forecasts = [
   {"time":"2025-11-18T00:00:00","height":1.2},
   {"time":"2025-11-18T01:00:00","height":1.4},
@@ -54,6 +54,22 @@ const forecasts = [
   {"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
+// ---- Find High & Low Tide Points ----
+function getHLPoints(heights) {
+  const high = [];
+  const low = [];
+
+  for (let i = 1; i < heights.length - 1; i++) {
+    if (heights[i] > heights[i-1] && heights[i] > heights[i+1]) {
+      high.push(i);
+    }
+    if (heights[i] < heights[i-1] && heights[i] < heights[i+1]) {
+      low.push(i);
+    }
+  }
+  return { high, low };
+}
+
 function processData(forecasts) {
   const labels = [];
   const heights = [];
@@ -71,6 +87,7 @@ function processData(forecasts) {
 }
 
 const { labels, heights, currentIndex } = processData(forecasts);
+const HL = getHLPoints(heights);
 
 function drawChart(labels, heights, currentIndex) {
   const ctx = document.getElementById('tideChart').getContext('2d');
@@ -79,15 +96,28 @@ function drawChart(labels, heights, currentIndex) {
     type: 'line',
     data: {
       labels: labels,
-      datasets: [{
-        label: 'Tide Height (m)',
-        data: heights,
-        fill: true,
-        borderColor: '#007bff',
-        backgroundColor: 'rgba(0,123,255,0.2)',
-        tension: 0.3,
-        pointRadius: 3
-      }]
+      datasets: [
+        {
+          label: 'Tide Height (m)',
+          data: heights,
+          fill: true,
+          borderColor: '#007bff',
+          backgroundColor: 'rgba(0,123,255,0.2)',
+          tension: 0.3,
+          pointRadius: function(context) {
+            const i = context.dataIndex;
+            if (HL.high.includes(i)) return 7;   // bigger point
+            if (HL.low.includes(i)) return 7;
+            return 3;
+          },
+          pointBackgroundColor: function(context){
+            const i = context.dataIndex;
+            if (HL.high.includes(i)) return "blue";
+            if (HL.low.includes(i)) return "green";
+            return "#007bff";
+          }
+        }
+      ]
     },
     options: {
       responsive: true,
@@ -104,7 +134,7 @@ function drawChart(labels, heights, currentIndex) {
     }
   });
 
-  // ---------------- DRAW RED LINE FUNCTION ----------------
+  // ---------------- DRAW RED LINE ----------------
   function drawRedLine(index) {
     const chart = tideChart;
     chart.update();
@@ -123,10 +153,9 @@ function drawChart(labels, heights, currentIndex) {
 
   drawRedLine(currentIndex);
 
-  // ---------------- DRAGGING LOGIC ----------------
+  // ---------------- DRAGGING + CUSTOM TOOLTIP ----------------
   const canvas = tideChart.canvas;
   const infoBox = document.getElementById("infoBox");
-
   let dragging = false;
 
   canvas.addEventListener("mousedown", () => dragging = true);
@@ -146,9 +175,7 @@ function drawChart(labels, heights, currentIndex) {
     if (index >= 0 && index < heights.length) {
       const h = heights[index];
       const rising = heights[index+1] > h ? "Rising" : "Falling";
-
       infoBox.innerHTML = `${h.toFixed(2)} m — ${rising}`;
-
       drawRedLine(index);
     }
   });
@@ -157,7 +184,6 @@ function drawChart(labels, heights, currentIndex) {
 }
 
 drawChart(labels, heights, currentIndex);
-
 </script>
 
 </body>
