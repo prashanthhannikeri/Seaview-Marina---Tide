@@ -9,7 +9,13 @@
   body { font-family:sans-serif; background:#f0f8ff; margin:20px; }
   h1 { text-align:center; color:#004080; }
   #chartWrap { width:90%; max-width:900px; margin:auto; position:relative; }
-  canvas { background:#fff; border-radius:6px; display:block; height:400px; width:100%; }
+  canvas { 
+    background:#fff; 
+    border-radius:6px; 
+    display:block; 
+    height:500px; /* increased height */
+    width:100%; 
+  }
   .tooltip-box {
     position:absolute; pointer-events:none; background:rgba(0,0,0,0.8);
     color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none;
@@ -19,6 +25,7 @@
   th, td { padding:6px; border-bottom:1px solid #eee; text-align:center; }
   th { background:#f7fbff; color:#004080; }
   .highlight { background:rgba(255,0,0,0.2); font-weight:600; }
+  #toggleTableBtn { display:block; margin:15px auto; padding:8px 12px; font-size:14px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -28,10 +35,15 @@
   <canvas id="tideChart"></canvas>
   <div id="lineTooltip" class="tooltip-box"></div>
 </div>
-<table id="tideTable">
-  <thead><tr><th>Time</th><th>Height (m)</th><th>Trend</th></tr></thead>
-  <tbody></tbody>
-</table>
+
+<!-- Collapsible Table Section -->
+<button id="toggleTableBtn">Show Tide Table ▼</button>
+<div id="tableContainer" style="display:none;">
+  <table id="tideTable">
+    <thead><tr><th>Time</th><th>Height (m)</th><th>Trend</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
 
 <script>
 // Sample 24h tide data
@@ -202,6 +214,19 @@ canvas.addEventListener('mouseup', e=>{
 
 // Auto-update every minute
 setInterval(()=>{if(!isDragging) markerTime=new Date(); chart.draw();},60000);
+
+// Collapsible table logic
+const toggleBtn = document.getElementById('toggleTableBtn');
+const tableContainer = document.getElementById('tableContainer');
+toggleBtn.addEventListener('click', ()=>{
+  if(tableContainer.style.display === 'none'){
+    tableContainer.style.display = 'block';
+    toggleBtn.textContent = 'Hide Tide Table ▲';
+  } else {
+    tableContainer.style.display = 'none';
+    toggleBtn.textContent = 'Show Tide Table ▼';
+  }
+});
 
 markerTime = new Date(); chart.draw();
 </script>
