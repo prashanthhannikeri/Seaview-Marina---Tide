@@ -1,24 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Seaview Marina Tide Forecast</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="utf-8" />
+<title>Seaview Marina — Tide Forecast (NZ Tide style)</title>
+
+<!-- Chart.js + zoom plugin -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
 <style>
-  body { font-family: sans-serif; background: #f0f8ff; margin: 20px; }
-  h1 { text-align: center; color: #004080; }
-  #chartContainer { width: 90%; max-width: 900px; margin: 30px auto; }
+  :root { --bg: #f0f8ff; --blue: #007bff; --accent: #004080; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: var(--bg); margin: 18px; color: #04213a; }
+  h1 { text-align: center; color: var(--accent); margin-bottom: 6px; }
+  p.subtitle { text-align:center; margin-top:0; margin-bottom:18px; color:#2b4d66; }
+  #chartWrapper { width: 95%; max-width: 980px; margin: 0 auto; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 6px 18px rgba(2,20,40,0.06); }
+  canvas { width: 100% !important; height: 360px !important; display:block; }
+  #controls { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:10px; }
+  .btn { background: var(--blue); color: white; padding:6px 10px; border-radius:6px; border: none; cursor:pointer; }
+  .btn.secondary { background: #eee; color: #222; }
+  #tableContainer { width: 95%; max-width:980px; margin: 16px auto 60px; background:white; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(2,20,40,0.04); }
+  table { width:100%; border-collapse: collapse; font-size:14px; }
+  th, td { padding:8px 6px; text-align:left; border-bottom:1px solid #f0f4f8; }
+  th { color:#24425a; background:#fbfdff; position:sticky; top:0; z-index:2; }
+  .peak { color:#b84d00; font-weight:600; }
+  .trough { color:#004d99; font-weight:600; }
+
+  /* tooltip-like box for the cursor */
+  .cursor-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: white;
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 8px 20px rgba(10,20,40,0.12);
+    font-size:13px;
+    transform: translate(-50%, -120%);
+    white-space:nowrap;
+    border-left:4px solid var(--blue);
+  }
+
+  /* floating height label above the centre line */
+  .height-label {
+    position:absolute;
+    transform: translate(-50%, -60%);
+    background: rgba(255,255,255,0.95);
+    border-radius:6px;
+    padding:4px 8px;
+    font-weight:700;
+    box-shadow: 0 6px 16px rgba(2,20,40,0.08);
+  }
+
+  /* small helper row */
+  .helper-row { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:8px; }
+  .note { color:#34556d; font-size:13px; }
 </style>
 </head>
 <body>
 
-<h1>Seaview Marina Tide Forecast</h1>
-<div id="chartContainer">
-  <canvas id="tideChart"></canvas>
+<h1>Seaview Marina — Tide Forecast</h1>
+<p class="subtitle">Hourly prediction (24 hours) — drag to pan, scroll to zoom. The red vertical cursor stays centred.</p>
+
+<div id="chartWrapper">
+  <div style="position:relative;">
+    <canvas id="tideChart"></canvas>
+    <div id="cursorTooltip" class="cursor-tooltip" style="display:none;">Time · Height</div>
+    <div id="heightLabel" class="height-label" style="display:none;">0.00 m</div>
+  </div>
+
+  <div id="controls">
+    <div>
+      <button id="recenterBtn" class="btn">Re-centre to now</button>
+      <button id="toggleAutoBtn" class="btn secondary">Auto-centre: ON</button>
+    </div>
+    <div class="note">Pan: click-drag — Zoom: mouse wheel / pinch</div>
+  </div>
+
+  <div class="helper-row" style="margin-top:8px;">
+    <div><strong>Red cursor</strong>: fixed centre — move the data beneath it to inspect times.</div>
+    <div style="font-size:13px;color:#34556d;">Peaks = high tides, troughs = low tides</div>
+  </div>
+</div>
+
+<div id="tableContainer">
+  <h3 style="margin:0 0 8px 0;">24-hour tide table</h3>
+  <div style="overflow:auto;">
+    <table id="tideTable">
+      <thead><tr><th>Time</th><th>Height (m)</th><th>Note</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
-// Inline tide data (next 24 hours sample)
+/* ===========================
+   1) Sample data: 24 hourly points
+   Replace this array with your API data (same format)
+   =========================== */
 const forecasts = [
   {"time":"2025-11-18T00:00:00","height":1.2},
   {"time":"2025-11-18T01:00:00","height":1.4},
@@ -46,71 +123,12 @@ const forecasts = [
   {"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
-function processData(forecasts) {
-  const labels = [];
-  const heights = [];
-  const now = new Date();
-  let currentIndex = 0;
+/* ===========================
+   2) Global settings
+   =========================== */
+const autoCentreToNow = true;   // keep the true 'now' centred under cursor each minute
+const autoCentreIntervalMs = 60 * 1000; // 1 minute updates
+const visiblePointsAtStart = 8; // how many points visible left-to-right at load (approx)
 
-  forecasts.forEach((f, i) => {
-    const t = new Date(f.time);
-    labels.push(t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
-    heights.push(f.height);
-    if (t > now && currentIndex === 0) currentIndex = i;
-  });
-
-  return { labels, heights, currentIndex };
-}
-
-function drawChart(labels, heights, currentIndex) {
-  const ctx = document.getElementById('tideChart').getContext('2d');
-
-  const tideChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Tide Height (m)',
-        data: heights,
-        fill: true,
-        borderColor: '#007bff',
-        backgroundColor: 'rgba(0,123,255,0.2)',
-        tension: 0.3,
-        pointRadius: 3
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend:{display:false}, title:{display:true,text:'Hourly Tide Predictions'} },
-      scales: {
-        x: { title: { display:true, text:'Time' } },
-        y: {
-          title: { display:true, text:'Height (m)' },
-          suggestedMin: Math.min(...heights)-0.5,
-          suggestedMax: Math.max(...heights)+0.5
-        }
-      },
-      animation:false
-    }
-  });
-
-  // Current time marker
-  const chart = tideChart;
-  const ctx2 = chart.ctx;
-  const xPixel = chart.scales.x.getPixelForValue(currentIndex);
-  ctx2.save();
-  ctx2.beginPath();
-  ctx2.moveTo(xPixel, chart.scales.y.top);
-  ctx2.lineTo(xPixel, chart.scales.y.bottom);
-  ctx2.strokeStyle = 'red';
-  ctx2.lineWidth = 2;
-  ctx2.stroke();
-  ctx2.restore();
-}
-
-const { labels, heights, currentIndex } = processData(forecasts);
-drawChart(labels, heights, currentIndex);
-</script>
-
-</body>
-</html>
+/* ===========================
+   3) Prepare labels & dataset (categ
