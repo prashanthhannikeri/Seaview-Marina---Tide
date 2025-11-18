@@ -51,7 +51,6 @@ const forecasts = [
 ];
 
 const dataPoints = forecasts.map(f=>({x:new Date(f.time),y:f.height}));
-
 const tooltip = document.getElementById('lineTooltip');
 const tbody = document.querySelector('#tideTable tbody');
 let markerTime = new Date();
@@ -66,14 +65,14 @@ function sampleAt(timeMs){
     if(timeMs >= t0 && timeMs <= t1){
       const ratio = (timeMs-t0)/(t1-t0);
       const y = dataPoints[i].y + (dataPoints[i+1].y - dataPoints[i].y)*ratio;
-      const slope = (dataPoints[i+1].y - dataPoints[i].y)/((t1-t0)/3600000); // per hour
+      const slope = (dataPoints[i+1].y - dataPoints[i].y)/((t1-t0)/3600000);
       return {x:new Date(timeMs),y,slope};
     }
   }
   return {x:dataPoints[dataPoints.length-1].x,y:dataPoints[dataPoints.length-1].y,slope:0};
 }
 
-// Detect high/low tide points
+// Find high/low tide points
 function findHighLow(data){
   const result = [];
   for(let i=1;i<data.length-1;i++){
@@ -84,10 +83,12 @@ function findHighLow(data){
 }
 const highLowPoints = findHighLow(dataPoints);
 
-// Build table
+// Build table showing only high/low in trend
 dataPoints.forEach(dp=>{
   const t = dp.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td class="trend"> </td></tr>`;
+  const trendPoint = highLowPoints.find(p=>+p.x===+dp.x);
+  const trendText = trendPoint ? (trendPoint.type==='high'?'High':'Low') : '';
+  tbody.innerHTML += `<tr><td>${t}</td><td>${dp.y.toFixed(2)}</td><td class="trend">${trendText}</td></tr>`;
 });
 
 // Vertical line plugin with high/low markers
@@ -127,11 +128,8 @@ const verticalLinePlugin = {
     ctx.restore();
 
     // Tooltip close to line
-    let trend = 'Stable';
-    if(s.slope > 0.01) trend = 'Rising';
-    else if(s.slope < -0.01) trend = 'Falling';
     tooltip.style.display='block';
-    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
+    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m`;
     tooltip.style.left = x + 'px';
     tooltip.style.top = y - 35 + 'px';
 
@@ -145,7 +143,6 @@ const verticalLinePlugin = {
       if(diff<minDiff){ minDiff=diff; closestIndex=i; }
     });
     rows[closestIndex].classList.add('highlight');
-    rows[closestIndex].querySelector('.trend').textContent = trend;
   }
 };
 
