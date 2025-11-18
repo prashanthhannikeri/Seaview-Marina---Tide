@@ -131,4 +131,302 @@ const autoCentreIntervalMs = 60 * 1000; // 1 minute updates
 const visiblePointsAtStart = 8; // how many points visible left-to-right at load (approx)
 
 /* ===========================
-   3) Prepare labels & dataset (categ
+   3) Prepare labels & dataset (category x scale)
+   We'll use a category x axis and compute numeric fractional index from pixel.
+   =========================== */
+const labels = forecasts.map(f => {
+  const d = new Date(f.time);
+  // British time formatting: 24-hour with leading zeros
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12:false });
+});
+const heights = forecasts.map(f => f.height);
+
+// compute high/low indices
+function findPeaksTroughs(values) {
+  const peaks = [];
+  const troughs = [];
+  for (let i = 1; i < values.length - 1; i++) {
+    if (values[i] > values[i-1] && values[i] > values[i+1]) peaks.push(i);
+    if (values[i] < values[i-1] && values[i] < values[i+1]) troughs.push(i);
+  }
+  return { peaks, troughs };
+}
+const { peaks, troughs } = findPeaksTroughs(heights);
+
+/* ===========================
+   4) Chart config
+   =========================== */
+const ctx = document.getElementById('tideChart').getContext('2d');
+
+const dataPoints = labels.map((lbl, i) => ({ x: lbl, y: heights[i] }));
+
+// configure dataset point styles to highlight peaks/troughs
+const pointBackgrounds = dataPoints.map((_, i) => {
+  if (peaks.includes(i)) return '#b84d00';
+  if (troughs.includes(i)) return '#004d99';
+  return 'rgba(0,0,0,0)';
+});
+const pointRadii = dataPoints.map((_, i) => peaks.includes(i) || troughs.includes(i) ? 5 : 0);
+
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [{
+      label: 'Tide Height (m)',
+      data: heights,
+      fill: true,
+      borderColor: '#007bff',
+      backgroundColor: 'rgba(0,123,255,0.12)',
+      tension: 0.25,
+      pointRadius: pointRadii,
+      pointHoverRadius: 6,
+      pointBackgroundColor: pointBackgrounds,
+      borderWidth: 2
+    }]
+  },
+  options: {
+    maintainAspectRatio: false,
+    animation: {
+      duration: 400,
+      easing: 'easeOutCubic'
+    },
+    scales: {
+      x: {
+        type: 'category',
+        title: { display: true, text: 'Time' },
+        ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }
+      },
+      y: {
+        title: { display: true, text: 'Height (m)' },
+        suggestedMin: Math.min(...heights) - 0.5,
+        suggestedMax: Math.max(...heights) + 0.5
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      // zoom plugin controls
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x',
+          modifierKey: null,
+          overScaleMode: 'x'
+        },
+        zoom: {
+          wheel: { enabled: true },
+          pinch: { enabled: true },
+          mode: 'x'
+        }
+      }
+    },
+    // custom option to control centre index (we will set/get this manually)
+    centreIndex: null,
+    responsive: true,
+    interaction: { mode: 'nearest', intersect: false }
+  },
+  plugins: [{
+    id: 'centreCursorPlugin',
+    afterDraw(chartInstance) {
+      const chartArea = chartInstance.chartArea;
+      if (!chartArea) return;
+
+      // centre X in pixels
+      const centerX = (chartArea.left + chartArea.right) / 2;
+      const ctx = chartInstance.ctx;
+
+      // draw vertical cursor line
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(centerX, chartArea.top);
+      ctx.lineTo(centerX, chartArea.bottom);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'red';
+      ctx.stroke();
+      ctx.restore();
+
+      // compute fractional index under cursor
+      const xScale = chartInstance.scales.x;
+      // get category index for pixel
+      const valueAtPixel = xScale.getValueForPixel(centerX); // returns fractional index
+      const fractionalIndex = valueAtPixel;
+      const leftIndex = Math.floor(fractionalIndex);
+      const rightIndex = Math.min(labels.length - 1, leftIndex + 1);
+      // linear interpolate Y between points
+      const leftY = heights[leftIndex];
+      const rightY = heights[rightIndex];
+      const t = fractionalIndex - leftIndex;
+      const interpY = (1 - t) * leftY + t * rightY;
+
+      // position tooltip and height label DOM elements
+      const tooltipEl = document.getElementById('cursorTooltip');
+      const labelEl = document.getElementById('heightLabel');
+      // position in page coords
+      const canvasRect = chartInstance.canvas.getBoundingClientRect();
+      const tooltipX = canvasRect.left + centerX;
+      const yPixel = chartInstance.scales.y.getPixelForValue(interpY);
+      const tooltipY = canvasRect.top + yPixel;
+
+      // Compose tooltip content
+      // time: determine nearest time string from fractionalIndex
+      const nearestIndex = Math.round(fractionalIndex);
+      // if in-between, show precise fractional time between labels
+      const timeStr = labels[nearestIndex] ?? labels[labels.length - 1];
+      const heightStr = interpY.toFixed(2) + ' m';
+
+      // rising/falling detection: compare small window slope
+      const slope = (() => {
+        const win = 1;
+        const i0 = Math.max(0, Math.min(labels.length - 1, Math.floor(fractionalIndex)));
+        const i1 = Math.max(0, Math.min(labels.length - 1, Math.ceil(fractionalIndex)));
+        const before = heights[Math.max(0, i0 - win)] ?? heights[i0];
+        const after = heights[Math.min(heights.length - 1, i1 + win)] ?? heights[i1];
+        return after - before;
+      })();
+      const trend = slope > 0.001 ? 'Rising' : (slope < -0.001 ? 'Falling' : 'Flat');
+
+      tooltipEl.style.display = 'block';
+      tooltipEl.innerHTML = `<strong>${timeStr}</strong> · ${heightStr} · ${trend}`;
+      // place above the Y pixel, but ensure stays inside window horizontally
+      tooltipEl.style.left = tooltipX + 'px';
+      tooltipEl.style.top = (canvasRect.top + chartArea.top) + 'px'; // pinned near top of chart
+      // centre transform in CSS handles centring
+
+      labelEl.style.display = 'block';
+      labelEl.innerText = interpY.toFixed(2) + ' m';
+      // position label just above the cursor line near top (small offset)
+      labelEl.style.left = tooltipX + 'px';
+      labelEl.style.top = (canvasRect.top + chartArea.top + 10) + 'px';
+    },
+    afterEvent(chartInstance, args) {
+      // hide tooltip when mouse leaves canvas
+      const evt = args.event;
+      if (evt.type === 'mouseout') {
+        document.getElementById('cursorTooltip').style.display = 'none';
+        document.getElementById('heightLabel').style.display = 'none';
+      }
+    }
+  }]
+});
+
+/* ===========================
+   5) Auto-centre routine (every minute)
+   Keeps "now" approximately under the fixed cursor (centre). Smooth animation applied.
+   =========================== */
+let autoCentreEnabled = autoCentreToNow;
+document.getElementById('toggleAutoBtn').innerText = `Auto-centre: ${autoCentreEnabled ? 'ON' : 'OFF'}`;
+
+function indexForTimeNow() {
+  const now = new Date();
+  // find nearest index by time difference from forecasts' timestamps
+  let bestIdx = 0;
+  let bestDiff = Infinity;
+  for (let i = 0; i < forecasts.length; i++) {
+    const d = new Date(forecasts[i].time);
+    const diff = Math.abs(d - now);
+    if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+  }
+  return bestIdx;
+}
+
+function centreChartAtIndex(index, animate = true) {
+  // For category scale we can set min/max to show a window around index
+  const halfWindow = Math.floor(visiblePointsAtStart / 2);
+  const min = Math.max(0, index - halfWindow - 0.2);
+  const max = Math.min(labels.length - 1, index + halfWindow + 0.2);
+  // we store min/max in options.scales.x.min/max and update chart
+  chart.options.scales.x.min = min;
+  chart.options.scales.x.max = max;
+
+  if (animate) chart.update('active'); else chart.update('none');
+}
+
+function autoCentreTick() {
+  if (!autoCentreEnabled) return;
+  const idx = indexForTimeNow();
+  centreChartAtIndex(idx, true);
+}
+
+// start with centring on now
+centreChartAtIndex(indexForTimeNow(), false);
+
+// schedule auto-centre every minute
+let autoTimer = setInterval(autoCentreTick, autoCentreIntervalMs);
+
+/* Buttons */
+document.getElementById('recenterBtn').addEventListener('click', () => {
+  centreChartAtIndex(indexForTimeNow(), true);
+});
+document.getElementById('toggleAutoBtn').addEventListener('click', (e) => {
+  autoCentreEnabled = !autoCentreEnabled;
+  e.target.innerText = `Auto-centre: ${autoCentreEnabled ? 'ON' : 'OFF'}`;
+});
+
+/* When user pans or zooms, we temporarily disable auto-centre for a short time to allow manual inspection.
+   After a period of inactivity, auto-centre returns (if enabled). */
+let userInteracting = false;
+let interactionTimer = null;
+function notifyUserInteraction() {
+  userInteracting = true;
+  if (interactionTimer) clearTimeout(interactionTimer);
+  interactionTimer = setTimeout(() => {
+    userInteracting = false;
+    if (autoCentreEnabled) autoCentreTick();
+  }, 4000); // 4 seconds of no interaction => resume auto-centre
+}
+chart.canvas.addEventListener('wheel', notifyUserInteraction, {passive:true});
+chart.canvas.addEventListener('mousedown', notifyUserInteraction);
+
+/* Also bind zoom/pan events from plugin to detect user interaction */
+chart.options.plugins.zoom.pan.onPan = function({chart: c}) { notifyUserInteraction(); };
+chart.options.plugins.zoom.zoom.onZoom = function({chart: c}) { notifyUserInteraction(); };
+
+/* ===========================
+   6) Render the 24-hour table under the chart
+   =========================== */
+function buildTable() {
+  const tbody = document.querySelector('#tideTable tbody');
+  tbody.innerHTML = '';
+  for (let i = 0; i < labels.length; i++) {
+    const tr = document.createElement('tr');
+    const timeTd = document.createElement('td');
+    timeTd.innerText = labels[i];
+    const heightTd = document.createElement('td');
+    heightTd.innerText = heights[i].toFixed(2) + ' m';
+    const noteTd = document.createElement('td');
+    if (peaks.includes(i)) noteTd.innerHTML = '<span class="peak">High tide</span>';
+    else if (troughs.includes(i)) noteTd.innerHTML = '<span class="trough">Low tide</span>';
+    else noteTd.innerText = '';
+    tr.appendChild(timeTd); tr.appendChild(heightTd); tr.appendChild(noteTd);
+    tbody.appendChild(tr);
+  }
+}
+buildTable();
+
+/* ===========================
+   7) Keep tooltip updated while user moves (on animation frame)
+   We'll call chart.draw() periodically so plugin 'afterDraw' updates DOM position.
+   =========================== */
+function refreshOverlay() {
+  // only update overlays (they are updated in afterDraw plugin)
+  chart.draw();
+  requestAnimationFrame(refreshOverlay);
+}
+requestAnimationFrame(refreshOverlay);
+
+/* ===========================
+   8) Optional: if you want to programmatically load real API data:
+   - replace `forecasts` array with your fetched data (same structure)
+   - rebuild labels/heights/peaks/troughs/dataPoints and call chart.data.datasets[0].data = heights; chart.data.labels = labels; chart.update();
+   =========================== */
+
+/* Notes:
+   - The red cursor is fixed at the centre of the canvas. Pan/zoom moves the data beneath it.
+   - The tooltip shows the interpolated height at the cursor and a 'Rising/Falling' status.
+   - Peaks/troughs are highlighted as larger points and labelled in the table.
+   - Auto-centre keeps current real time near the centre; if you manually interact it will pause briefly.
+*/
+</script>
+
+</body>
+</html>
