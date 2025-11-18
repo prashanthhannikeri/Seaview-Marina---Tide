@@ -42,13 +42,13 @@ const forecasts = [
   {"time":"2025-11-18T22:00:00","height":1.6},{"time":"2025-11-18T23:00:00","height":1.4}
 ];
 
-// Convert to chart points
 const dataPoints = forecasts.map(f=>({x:new Date(f.time),y:f.height}));
 
 const tooltip = document.getElementById('lineTooltip');
 let markerTime = new Date();
 let isDragging = false;
 
+// Linear interpolation to get tide height at any time
 function sampleAt(timeMs){
   if(timeMs <= +dataPoints[0].x) return dataPoints[0];
   if(timeMs >= +dataPoints[dataPoints.length-1].x) return dataPoints[dataPoints.length-1];
@@ -78,7 +78,18 @@ const verticalLinePlugin = {
     ctx.strokeStyle = 'red';
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Draw circle at current height
+    const s = sampleAt(+markerTime);
+    const y = yScale.getPixelForValue(s.y);
+    ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
     ctx.restore();
+
+    // Update tooltip
+    tooltip.style.display='block';
+    tooltip.innerHTML=`<strong>${s.x.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m`;
+    tooltip.style.left = x + chart.canvas.getBoundingClientRect().left - chart.canvas.offsetLeft + 'px';
+    tooltip.style.top = y + chart.canvas.getBoundingClientRect().top - chart.canvas.offsetTop - 20 + 'px';
   }
 };
 
@@ -110,9 +121,32 @@ const chart = new Chart(ctx,{
 // Drag logic
 const canvas = chart.canvas;
 function pixelToTime(px){ return chart.scales.x.getValueForPixel(px); }
-canvas.addEventListener('mousedown', e=>{isDragging=true; markerTime=pixelToTime(e.offsetX);});
+
+canvas.addEventListener('mousedown', e=>{isDragging=true; markerTime=pixelToTime(e.offsetX); chart.draw();});
 canvas.addEventListener('mousemove', e=>{if(isDragging){markerTime=pixelToTime(e.offsetX); chart.draw();}});
-canvas.addEventListener('mouseup', e=>{if(isDragging){isDragging=false; markerTime=new Date(); chart.draw();}});
+canvas.addEventListener('mouseup', e=>{
+  if(isDragging){
+    isDragging=false;
+    // Animate back to current time
+    const start = +markerTime;
+    const end = +new Date();
+    const t0 = performance.now();
+    function step(now){
+      const elapsed = now-t0;
+      const frac = Math.min(1, elapsed/800);
+      const ease = 1-(1-frac)*(1-frac);
+      markerTime = new Date(start + (end-start)*ease);
+      chart.draw();
+      if(frac<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+});
+
+// Auto-update every minute if not dragging
+setInterval(()=>{if(!isDragging) markerTime=new Date(); chart.draw();},60000);
+
+markerTime = new Date(); chart.draw();
 </script>
 </body>
 </html>
