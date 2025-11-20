@@ -33,6 +33,7 @@
 
   <div id="controls">
     <input type="date" id="dateSelector" />
+    <button id="todayBtn">Today</button>
     <button id="toggleTableBtn">Show Tide Table ▼</button>
   </div>
 
@@ -283,7 +284,7 @@ const verticalLinePlugin = {
     // position relative to chart container
     const rect = chart.canvas.getBoundingClientRect();
     tooltip.style.left = (rect.left + x) + 'px';
-    tooltip.style.top = (rect.top + y - 38) + 'px';
+    tooltip.style.top = (rect.top + (yScale.top + yScale.bottom)/2 - 18) + 'px'';
   }
 };
 
@@ -319,7 +320,7 @@ const chart = new Chart(ctx, {
       data: [], // filled later with dataPoints (sampled)
       borderColor: '#007bff',
       backgroundColor: 'rgba(0,123,255,0.15)',
-      tension: 0.25,
+      tension: 0.5,
       pointRadius: 0.5,
       fill: true
     }, {
@@ -480,6 +481,13 @@ dateSelector.addEventListener('change', ()=>{
   }
   renderForDate(dateSelector.value);
 });
+  const todayBtn = document.getElementById('todayBtn');
+todayBtn.addEventListener('click', () => {
+  const todayISO = new Date().toISOString().slice(0,10);
+  dateSelector.value = todayISO;
+  renderForDate(todayISO);
+});
+
 
 // initial load
 loadAndInit();
