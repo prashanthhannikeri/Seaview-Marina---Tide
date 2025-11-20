@@ -268,17 +268,9 @@ const verticalLinePlugin = {
     tooltip.style.display = 'block';
     tooltip.innerHTML = `<strong>${s.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
     // position relative to chart container
-    // get interpolated value at markerTime
-const s = sampleAt(markerTime);
-const y = chart.scales.y.getPixelForValue(s.y);
-
-// Tooltip content
-tooltip.innerHTML = `<strong>${s.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m`;
-
-// Position tooltip relative to chart container
-tooltip.style.left = x + 'px';
-tooltip.style.top = y - 18 + 'px';
-tooltip.style.display = 'block';
+     const rect = chart.canvas.getBoundingClientRect();
+    tooltip.style.left = (rect.left + x) + 'px';
+    tooltip.style.top = (rect.top + (yScale.getPixelForValue(s.y)) - 18) + 'px';
 
   }
 };
