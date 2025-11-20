@@ -1,170 +1,234 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Seaview Marina — Tide Viewer</title>
-
-<!-- Chart.js and date adapter -->
+<meta charset="UTF-8">
+<title>Tide Graph</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.0/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
 
 <style>
-  body { font-family: Arial, sans-serif; background:#f0f8ff; margin:18px; color:#033; }
-  h1 { text-align:center; color:#004080; margin-bottom:6px; }
-  #controls { text-align:center; margin-bottom:12px; }
-  #dateSelector, #todayBtn { padding:8px; font-size:15px; border-radius:6px; border:1px solid #ccc; }
-  #todayBtn { margin-left:6px; cursor:pointer; background:#fff; }
-  #chartWrap { width:92%; max-width:980px; margin:10px auto; position:relative; }
-  canvas { background:#fff; border-radius:8px; display:block; height:420px; width:100%; }
-  .tooltip-box { position:absolute; pointer-events:none; background:rgba(0,0,0,0.8); color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none; white-space:nowrap; transform:translate(-50%, -120%); }
-  #toggleTableBtn { display:block; margin:10px auto; padding:8px 12px; font-size:14px; cursor:pointer; border-radius:6px; border:1px solid #ccc; background:#fff; }
-  #tableContainer { width:92%; max-width:980px; margin:10px auto; }
-  table { width:100%; border-collapse:collapse; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-  th, td { padding:8px 10px; text-align:center; border-bottom:1px solid #eee; }
-  th { background:#f7fbff; color:#004080; font-weight:600; }
-  .high { color:green; font-weight:700; }
-  .low { color:orange; font-weight:700; }
-  #notice { max-width:980px; margin:6px auto; text-align:center; color:#666; font-size:13px; }
+    body {
+        font-family: Arial, sans-serif;
+        margin: 30px;
+        max-width: 900px;
+    }
+
+    #chart-container {
+        height: 350px;
+        position: relative;
+    }
+
+    #tideTable {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 15px;
+        display: none; /* Collapsed by default */
+    }
+
+    #tideTable th, #tideTable td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: centre;
+    }
+
+    #toggleTable {
+        background: #007bff;
+        padding: 6px 14px;
+        border: none;
+        border-radius: 6px;
+        colour: white;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+
+    #dateContainer {
+        margin-bottom: 15px;
+    }
+
+    #todayBtn {
+        margin-left: 10px;
+        padding: 4px 10px;
+        background: #28a745;
+        colour: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
 </style>
+
 </head>
 <body>
-  <h1>Seaview Marina Tide Viewer</h1>
 
-  <div id="controls">
-    <input type="date" id="dateSelector" />
+<h2>Seaview Marina – Tide Chart</h2>
+
+<div id="dateContainer">
+    <input type="date" id="datePicker">
     <button id="todayBtn">Today</button>
-    <button id="toggleTableBtn">Show Tide Table ▼</button>
-  </div>
+</div>
 
-  <div id="chartWrap">
+<div id="chart-container">
     <canvas id="tideChart"></canvas>
-    <div id="lineTooltip" class="tooltip-box"></div>
-  </div>
+</div>
 
-  <div id="tableContainer" style="display:none;">
-    <table id="tideTable">
-      <thead>
-        <tr><th>Time</th><th>Height (m)</th><th>Type</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+<button id="toggleTable">Show Table</button>
 
-  <div id="notice" class="small">CSV source: 
-    <span id="csvUrlDisplay"></span>
-  </div>
+<table id="tideTable">
+    <thead>
+        <tr>
+            <th>Time</th>
+            <th>Height (m)</th>
+            <th>Type</th>
+        </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+</table>
 
 <script>
-/* CSV URL — already set to your file */
-const CSV_RAW_URL = "https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/tide_data%202025.csv";
+const CSV_URL = "https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/tide_data%202025.csv";  // <-- Replace with raw GitHub CSV URL
+let tideChart = null;
 
-document.getElementById('csvUrlDisplay').textContent = CSV_RAW_URL;
+// --- LOAD CSV FUNCTION ---
+async function loadCSV() {
+    const response = await fetch(CSV_URL);
+    const text = await response.text();
+    const rows = text.trim().split("\n").slice(1);
 
-/* ---------------- EXISTING LOGIC UNCHANGED UNTIL CHART SECTION ---------------- */
-/* (I am not pasting commentary here to keep code clean — everything below is identical to your working version except 3 upgrade areas) */
+    return rows.map(row => {
+        const [date, time, height, type] = row.split(",");
+        return {
+            datetime: `${date}T${time}`,
+            date,
+            time,
+            height: parseFloat(height),
+            type
+        };
+    });
+}
 
-/* --- trimmed for space; only showing modified sections below --- */
+// --- FILTER DATA FOR SELECTED DAY ---
+function filterByDate(data, selectedDate) {
+    return data.filter(d => d.date === selectedDate);
+}
 
+// --- CREATE CHART ---
+function renderChart(filteredData) {
+    const ctx = document.getElementById("tideChart").getContext("2d");
 
-/* ================= Chart Setup ================= */
-const ctx = document.getElementById('tideChart').getContext('2d');
-const tooltip = document.getElementById('lineTooltip');
-let markerTime = new Date();
+    if (tideChart) tideChart.destroy();
 
-const chart = new Chart(ctx, {
-  type: 'line',
-  data: {
-    datasets: [{
-      label: 'Tide height (m)',
-      data: [],
-      borderColor: '#007bff',
-      backgroundColor: 'rgba(0,123,255,0.15)',
+    const now = new Date();
 
-      /* ⭐ Wave effect */
-      tension: 0.5,
+    tideChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            datasets: [
+                {
+                    label: "Tide Height (m)",
+                    data: filteredData.map(d => ({
+                        x: d.datetime,
+                        y: d.height
+                    })),
+                    tension: 0.5,     // 🔵 Wave effect (smooth)
+                    borderWidth: 2
+                },
+                {
+                    label: "Current Time",
+                    data: [
+                        { x: now, y: 0 },
+                        { x: now, y: 2.5 }
+                    ],
+                    borderColor: "red",
+                    borderWidth: 2,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: 0,
+                    max: 2.5,
+                    title: { display: true, text: "Metres" }
+                },
+                x: {
+                    type: "time",
+                    time: {
+                        displayFormats: { hour: "HH:mm" }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    mode: "nearest",
+                    intersect: false,
+                    position: "nearest",
+                    callbacks: {
+                        title: context => "Tide Info",
+                        label: context =>
+                            `Time: ${new Date(context.parsed.x).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Height: ${context.parsed.y} m`
+                    }
+                },
+                annotation: {}
+            }
+        }
+    });
+}
 
-      pointRadius: 0,
-      fill: true
-    }, {
-      label: 'High/Low',
-      data: [],
-      pointRadius: 6,
-      showLine: false,
-      backgroundColor: [],
-      borderColor: []
-    }]
-  },
-  options: {
-    responsive: true,
-    animation: false,
-    scales: {
-      x: { type: 'time', time: { unit: 'hour' } },
-      y: { min: 0, max: 2.5 }
-    },
-    /* default tooltip disabled */
-    plugins: { tooltip: { enabled: false }, legend: { display:false } }
-  },
-  plugins: [{
-    id: 'verticalLinePlugin',
-    afterDraw(chart) {
-      const xScale = chart.scales.x;
-      const yScale = chart.scales.y;
-      if (!xScale || !yScale) return;
+// --- UPDATE TABLE ---
+function updateTable(filteredData) {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
 
-      const ctx = chart.ctx;
-      const x = xScale.getPixelForValue(markerTime);
+    filteredData.forEach(d => {
+        const row = `<tr>
+            <td>${d.time}</td>
+            <td>${d.height}</td>
+            <td>${d.type}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+    });
+}
 
-      const s = sampleAt(markerTime);
-      const y = yScale.getPixelForValue(s.y);
+// --- ON DATE CHANGE ---
+async function updateGraph() {
+    const allData = await loadCSV();
+    const selected = document.getElementById("datePicker").value;
 
-      /* draw vertical line */
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x, yScale.top);
-      ctx.lineTo(x, yScale.bottom);
-      ctx.strokeStyle = 'red';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+    const filtered = filterByDate(allData, selected);
 
-      /* red dot */
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI*2);
-      ctx.fillStyle = 'red';
-      ctx.fill();
+    renderChart(filtered);
+    updateTable(filtered);
+}
 
-      ctx.restore();
-
-      /* ⭐ Tooltip locked to marker dot */
-      tooltip.style.display = 'block';
-      tooltip.style.left = (chart.canvas.getBoundingClientRect().left + x) + 'px';
-      tooltip.style.top  = (chart.canvas.getBoundingClientRect().top + y - 25) + 'px';
-
-      tooltip.innerHTML =
-        `<strong>${s.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong>
-         <br>${s.y.toFixed(2)} m`;
-    }
-  }]
-});
-
-
-/* ================= Today Button ================= */
+// --- TODAY BUTTON ---
 document.getElementById("todayBtn").addEventListener("click", () => {
-  const todayISO = new Date().toISOString().slice(0,10);
-  if (dayMap.has(todayISO)) {
-    dateSelector.value = todayISO;
-    renderForDate(todayISO);
-  } else {
-    alert("Today's tide data is not in the CSV file.");
-  }
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("datePicker").value = today;
+    updateGraph();
 });
 
+// --- TABLE COLLAPSE ---
+document.getElementById("toggleTable").addEventListener("click", () => {
+    const table = document.getElementById("tideTable");
+    if (table.style.display === "none") {
+        table.style.display = "table";
+        toggleTable.textContent = "Hide Table";
+    } else {
+        table.style.display = "none";
+        toggleTable.textContent = "Show Table";
+    }
+});
 
-/* ---- REST OF YOUR ORIGINAL CODE BELOW (unchanged) ---- */
-
-/* (Due to message length limits, repeating the full file is not allowed.
-   But everything above includes **all required modifications**.
-   If you want the entire 100% full file again, I can split into two messages.) */
-
+// --- INIT (load today's data) ---
+document.addEventListener("DOMContentLoaded", () => {
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("datePicker").value = today;
+    updateGraph();
+});
 </script>
+
 </body>
 </html>
