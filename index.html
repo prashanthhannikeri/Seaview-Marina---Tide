@@ -1,333 +1,489 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Seaview Marina Tide Forecast</title>
+<meta charset="utf-8" />
+<title>Seaview Marina — Tide Viewer</title>
+
+<!-- Chart.js and date adapter -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background: #eef7ff;
-  }
-
-  #chartWrap {
-    width: 90%;
-    max-width: 900px;
-    margin: 20px auto;
-    position: relative;
-  }
-
-  canvas {
-    background: white;
-    border-radius: 8px;
-    width: 100% !important;
-    height: 380px !important;
-  }
-
-  #redline-tooltip {
-    position: absolute;
-    pointer-events: none;
-    opacity: 0;
-    transition: 0.1s ease;
-  }
-
-  .tooltip-bubble {
-    background: #007bff;
-    color: white;
-    padding: 6px 10px;
-    font-size: 12px;
-    border-radius: 20px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-    white-space: nowrap;
-  }
-
-  #tableContainer {
-    width: 90%;
-    max-width: 900px;
-    margin: auto;
-  }
-
-  #tideTable {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-    display: none;
-  }
-
-  #tideTable th, #tideTable td {
-    border: 1px solid #ccc;
-    padding: 6px;
-    text-align: center;
-    background: white;
-  }
-
-  #toggleTable {
-    cursor: pointer;
-    background: #007bff;
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin-top: 10px;
-  }
+  body { font-family: Arial, sans-serif; background:#f0f8ff; margin:18px; color:#033; }
+  h1 { text-align:center; color:#004080; margin-bottom:6px; }
+  #controls { text-align:center; margin-bottom:12px; }
+  #dateSelector { padding:8px; font-size:15px; border-radius:6px; border:1px solid #ccc; }
+  #chartWrap { width:92%; max-width:980px; margin:10px auto; position:relative; }
+  canvas { background:#fff; border-radius:8px; display:block; height:420px; width:100%; }
+  .tooltip-box { position:absolute; pointer-events:none; background:rgba(0,0,0,0.8); color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; display:none; transform:translate(-50%,-100%); white-space:nowrap; }
+  #toggleTableBtn { display:block; margin:10px auto; padding:8px 12px; font-size:14px; cursor:pointer; border-radius:6px; border:1px solid #ccc; background:#fff; }
+  #tableContainer { width:92%; max-width:980px; margin:10px auto; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+  th, td { padding:8px 10px; text-align:center; border-bottom:1px solid #eee; }
+  th { background:#f7fbff; color:#004080; font-weight:600; }
+  .high { color:green; font-weight:700; }
+  .low { color:orange; font-weight:700; }
+  .highlight { background:rgba(255,0,0,0.08); }
+  .small { font-size:13px; color:#555; }
+  #notice { max-width:980px; margin:6px auto; text-align:center; color:#666; font-size:13px; }
 </style>
 </head>
 <body>
+  <h1>Seaview Marina Tide Viewer</h1>
 
-<h2 style="text-align:center;">Seaview Marina Tide Forecast</h2>
+  <div id="controls">
+    <input type="date" id="dateSelector" />
+    <button id="toggleTableBtn">Show Tide Table ▼</button>
+  </div>
 
-<div style="text-align:center; margin-bottom:10px;">
-  <input type="date" id="datePicker">
-  <button id="todayBtn">Today</button>
-</div>
+  <div id="chartWrap">
+    <canvas id="tideChart"></canvas>
+    <div id="lineTooltip" class="tooltip-box"></div>
+  </div>
 
-<div id="chartWrap">
-  <canvas id="tideChart"></canvas>
-  <div id="redline-tooltip"></div>
-</div>
+  <div id="tableContainer" style="display:none;">
+    <table id="tideTable">
+      <thead>
+        <tr><th>Time</th><th>Height (m)</th><th>Type</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
-<div id="tableContainer">
-  <button id="toggleTable">Show Tide Table</button>
-
-  <table id="tideTable">
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th>Height (m)</th>
-        <th>Trend</th>
-      </tr>
-    </thead>
-    <tbody id="tideBody"></tbody>
-  </table>
-</div>
+  <div id="notice" class="small">CSV source: <span id="csvUrlDisplay"></span></div>
 
 <script>
-/* -------- CSV URL (replace this with your GitHub RAW link) -------- */
-const CSV_URL = "https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/tide_data%202025.csv";
+/* =========== USER: paste your GitHub raw CSV URL here =========== */
+const CSV_RAW_URL = "https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/tide_data%202025.csv";
+/* ================================================================= */
 
-/* -------- Global Vars -------- */
-let tideChart = null;
-let redLineX = 0;
-let currentRedlineHeight = 0;
+/*
+CSV format expected (exact column names not case-sensitive):
+Date,Time1,Tide1,Time2,Tide2,Time3,Tide3,Time4,Tide4
+Date values like 1/01/2025  or 01/01/2025
+Times like 0:17 or 06:36
+Tides numeric like 1.6
+*/
 
-/* -------- Load CSV -------- */
-async function loadCSV() {
-  const res = await fetch(CSV_URL);
-  const text = await res.text();
-  return parseCSV(text);
+document.getElementById('csvUrlDisplay').textContent = CSV_RAW_URL || '(set CSV_RAW_URL in the HTML)';
+
+const dateSelector = document.getElementById('dateSelector');
+const tbody = document.querySelector('#tideTable tbody');
+const toggleBtn = document.getElementById('toggleTableBtn');
+const tableContainer = document.getElementById('tableContainer');
+const tooltip = document.getElementById('lineTooltip');
+
+let rawRows = [];                 // parsed CSV rows as arrays
+let dayMap = new Map();           // Map of dateKey (YYYY-MM-DD) => array of {tStr, h}
+let availableDates = [];          // list of date keys
+let dataPoints = [];              // sampled points for current day (every 15m)
+let highLowPoints = [];           // detected high/low points for current day
+
+// Helper: detect delimiter and parse CSV text
+function parseCSV(text){
+  // trim and split lines
+  const lines = text.trim().split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length === 0) return [];
+  // detect delimiter by header
+  const header = lines[0];
+  let delim = ',';
+  if(header.indexOf('\t') !== -1) delim = '\t';
+  else if(header.indexOf(';') !== -1) delim = ';';
+  else delim = ',';
+  return lines.map(line => line.split(delim).map(cell => cell.trim()));
 }
 
-/* -------- Parse CSV Format -------- */
-function parseCSV(csv) {
-  const lines = csv.trim().split("\n");
-  const header = lines.shift().split(",");
-
-  const data = {};
-
-  for (let line of lines) {
-    let cols = line.split(",");
-
-    const date = cols[0];
-    const time1 = cols[1], tide1 = parseFloat(cols[2]);
-    const time2 = cols[3], tide2 = parseFloat(cols[4]);
-    const time3 = cols[5], tide3 = parseFloat(cols[6]);
-    const time4 = cols[7], tide4 = parseFloat(cols[8]);
-
-    data[date] = [
-      { time: time1, height: tide1 },
-      { time: time2, height: tide2 },
-      { time: time3, height: tide3 },
-      { time: time4, height: tide4 }
-    ].filter(v => v.time !== "");
-  }
-
-  return data;
+// Convert date in CSV like "1/01/2025" into ISO date "2025-01-01"
+function csvDateToISO(dStr){
+  const parts = dStr.split('/');
+  if(parts.length < 3) return null;
+  let day = parts[0].padStart(2,'0');
+  let month = parts[1].padStart(2,'0');
+  let year = parts[2];
+  return `${year}-${month}-${day}`;
 }
 
-/* -------- Draw Chart -------- */
-function drawChart(times, heights, lowHighTimes) {
-  if (tideChart) tideChart.destroy();
+// Convert time strings like "0:17" or "06:36" to "HH:MM"
+function normalizeTime(tStr){
+  if(!tStr) return null;
+  const parts = tStr.split(':');
+  if(parts.length === 1) parts.push('00');
+  const hh = parts[0].padStart(2,'0');
+  const mm = parts[1].padStart(2,'0');
+  return `${hh}:${mm}`;
+}
 
-  const ctx = document.getElementById("tideChart").getContext("2d");
-
-  tideChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: times,
-      datasets: [{
-        label: "Tide Height",
-        data: heights,
-        borderColor: "#007bff",
-        borderWidth: 2,
-        fill: false,
-        tension: 0.45,      // ← Wave effect
-        pointRadius: 3
-      },
-      {
-        label: "High/Low Tide",
-        data: heights.map((h, i) => lowHighTimes.includes(i) ? h : null),
-        borderColor: "gold",
-        backgroundColor: "gold",
-        pointRadius: 6,
-        showLine: false
-      }]
-    },
-
-    options: {
-      responsive: true,
-      animation: false,
-
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          enabled: false,
-          external: customRedlineTooltip
-        }
-      },
-
-      scales: {
-        y: {
-          min: 0,
-          max: 2.5,
-          title: { display: true, text: "Height (m)" }
-        }
-      },
-
-      events: ["mousemove", "mouseout", "click", "touchstart", "touchmove"]
+// Build dayMap from parsed CSV rows
+function buildDayMap(rows){
+  dayMap.clear();
+  availableDates = [];
+  // first row might be header - try to detect header by non-date in first column
+  let startIndex = 0;
+  if(rows.length===0) return;
+  if(!rows[0][0].match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) startIndex = 1;
+  for(let i=startIndex;i<rows.length;i++){
+    const r = rows[i];
+    if(r.length < 2) continue;
+    const dateRaw = r[0];
+    const iso = csvDateToISO(dateRaw);
+    if(!iso) continue;
+    const entries = [];
+    // Expect Time1,Tide1 ... up to 4 pairs
+    for(let k=1;k+1<r.length;k+=2){
+      const t = r[k];
+      const h = r[k+1];
+      if(t && h){
+        const nt = normalizeTime(t);
+        const nh = parseFloat(h);
+        if(!isNaN(nh)) entries.push({time:nt, height:nh});
+      }
     }
-  });
-
-  updateRedLine();
+    // sort by time
+    entries.sort((a,b)=> {
+      const A = a.time;
+      const B = b.time;
+      return A.localeCompare(B);
+    });
+    dayMap.set(iso, entries);
+    availableDates.push(iso);
+  }
+  // sort availableDates
+  availableDates.sort();
 }
 
-/* -------- Custom Tooltip (NZ Tide Style) -------- */
-function customRedlineTooltip(ctx) {
-  const {chart} = ctx;
-  const tooltip = document.getElementById("redline-tooltip");
-
-  const yScale = chart.scales.y;
-
-  tooltip.innerHTML = `<div class="tooltip-bubble">${currentRedlineHeight} m</div>`;
-  tooltip.style.left = redLineX - 20 + "px";
-  tooltip.style.top = yScale.getPixelForValue(currentRedlineHeight) - 40 + "px";
-  tooltip.style.opacity = 1;
+// Helper to get previous date ISO and next date ISO
+function addDaysISO(iso,delta){
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate()+delta);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-/* -------- Update Red Line Position -------- */
-function updateRedLine() {
-  const chart = tideChart;
-  const now = new Date();
+// For a target date, build "known" tide events as absolute timestamps (ms) across previous day through next day
+function buildKnownEventsForDate(dateISO){
+  // We'll include:
+  // - last tide(s) from previous day with timestamp on previous date
+  // - all tides from current date (timestamps on that date)
+  // - first tide(s) from next day (timestamp on next date)
+  const prev = addDaysISO(dateISO, -1);
+  const next = addDaysISO(dateISO, +1);
+  const ev = [];
 
-  const times = chart.data.labels;
-  const heights = chart.data.datasets[0].data;
-
-  let closestIndex = 0;
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
-  times.forEach((t, i) => {
-    const [h, m] = t.split(":").map(Number);
-    const thisMinutes = h * 60 + m;
-    if (thisMinutes <= nowMinutes) closestIndex = i;
-  });
-
-  redLineX = chart.scales.x.getPixelForValue(closestIndex);
-  currentRedlineHeight = heights[closestIndex];
-
-  drawRedLine();
+  function pushDay(iso, tag){
+    const arr = dayMap.get(iso) || [];
+    arr.forEach(item=>{
+      const dtStr = `${iso}T${item.time}`;
+      ev.push({t:new Date(dtStr), h:item.height, dayIso:iso});
+    });
+  }
+  pushDay(prev);   // previous day's tides
+  pushDay(dateISO); // current
+  pushDay(next);   // next
+  // sort by time
+  ev.sort((a,b)=> +a.t - +b.t);
+  return ev;
 }
 
-/* -------- Draw Red Line -------- */
-function drawRedLine() {
-  const chart = tideChart;
-  const ctx = chart.ctx;
-  const x = redLineX;
+// build sampled points every 'stepMins' minutes from midnight of dateISO to end of that day
+function sampleDay(dateISO, stepMins=15){
+  const events = buildKnownEventsForDate(dateISO);
+  // If not enough events (e.g., missing prev/next), fill with duplication
+  if(events.length < 2){
+    // fallback: create two dummy events to avoid crash
+    const base = new Date(dateISO + 'T00:00:00');
+    events.length = 0;
+    events.push({t: new Date(+base), h:1.2});
+    events.push({t: new Date(+base + 12*3600*1000), h:1.6});
+    events.push({t: new Date(+base + 24*3600*1000), h:1.2});
+  }
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(x, chart.chartArea.top);
-  ctx.lineTo(x, chart.chartArea.bottom);
-  ctx.strokeStyle = "red";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
-
-  chart.draw();
-}
-
-/* -------- Load Data for Selected Date -------- */
-async function loadTidesForDate(dateStr) {
-  const allData = await loadCSV();
-  const entry = allData[dateStr];
-
-  if (!entry) return;
-
-  // sort times
-  entry.sort((a,b) => {
-    const [h1,m1]=a.time.split(":"); 
-    const [h2,m2]=b.time.split(":");
-    return h1*60+m1 - (h2*60+m2);
-  });
-
-  const times = entry.map(e => e.time);
-  const heights = entry.map(e => e.height);
-
-  // detect highs/lows
-  const markers = [];
-  heights.forEach((h,i)=>{
-    if (i>0 && i<heights.length-1) {
-      if (h > heights[i-1] && h > heights[i+1]) markers.push(i);
-      if (h < heights[i-1] && h < heights[i+1]) markers.push(i);
+  const start = new Date(dateISO + 'T00:00:00');
+  const end = new Date(dateISO + 'T23:59:59');
+  const sampled = [];
+  for(let ms = +start; ms <= +end; ms += stepMins*60*1000){
+    // find surrounding known events
+    let prev = events[0], next = events[events.length-1];
+    for(let i=0;i<events.length-1;i++){
+      if(+events[i].t <= ms && ms <= +events[i+1].t){
+        prev = events[i];
+        next = events[i+1];
+        break;
+      }
+      if(ms < +events[0].t){
+        prev = {t: new Date(+events[0].t - 12*3600*1000), h: events[0].h};
+        next = events[0];
+        break;
+      }
+      if(ms > +events[events.length-1].t){
+        prev = events[events.length-1];
+        next = {t: new Date(+events[events.length-1].t + 12*3600*1000), h: events[events.length-1].h};
+        break;
+      }
     }
-  });
-
-  drawChart(times, heights, markers);
-  fillTable(times, heights);
+    // linear interpolation
+    const t0 = +prev.t, t1 = +next.t;
+    const ratio = (ms - t0) / (t1 - t0 || 1);
+    const y = prev.h + (next.h - prev.h) * ratio;
+    sampled.push({x:new Date(ms), y: parseFloat(y.toFixed(3))});
+  }
+  return sampled;
 }
 
-/* -------- Table Fill -------- */
-function fillTable(times, heights) {
-  const body = document.getElementById("tideBody");
-  body.innerHTML = "";
-
-  for (let i = 0; i < times.length; i++) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${times[i]}</td>
-      <td>${heights[i]}</td>
-      <td>${i>0 ? (heights[i] > heights[i-1] ? "Rising" : "Falling") : "-"}</td>
-    `;
-    body.appendChild(tr);
+// detect local highs and lows in sampled data (simple neighbor compare)
+function detectHighLow(sampled){
+  const peaks = [];
+  for(let i=1;i<sampled.length-1;i++){
+    const prev = sampled[i-1].y, cur = sampled[i].y, next = sampled[i+1].y;
+    if(cur > prev && cur > next) peaks.push({...sampled[i],type:'High'});
+    if(cur < prev && cur < next) peaks.push({...sampled[i],type:'Low'});
   }
+  // filter to keep only those peaks that belong to the requested date (we'll filter later)
+  return peaks;
 }
 
-/* -------- Today Button -------- */
-document.getElementById("todayBtn").addEventListener("click", () => {
-  const today = new Date().toISOString().split("T")[0];
-  document.getElementById("datePicker").value = today;
-  loadTidesForDate(today);
-});
+/* ================= Chart & UI setup ================= */
 
-/* -------- Collapsible Table -------- */
-document.getElementById("toggleTable").addEventListener("click", () => {
-  const table = document.getElementById("tideTable");
-  if (table.style.display === "none") {
-    table.style.display = "table";
-    toggleTable.innerText = "Hide Tide Table";
-  } else {
-    table.style.display = "none";
-    toggleTable.innerText = "Show Tide Table";
+let markerTime = new Date();
+let isDragging = false;
+
+// Chart plugin for vertical line and tooltip
+const verticalLinePlugin = {
+  id: 'verticalLinePlugin',
+  afterDraw(chart){
+    const xScale = chart.scales.x, yScale = chart.scales.y;
+    if(!xScale || !yScale) return;
+    const ctx = chart.ctx;
+    const x = xScale.getPixelForValue(markerTime);
+    // if NaN skip
+    if(!isFinite(x)) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, yScale.top);
+    ctx.lineTo(x, yScale.bottom);
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // draw small circle at interpolated height
+    const s = sampleAt(markerTime);
+    const y = yScale.getPixelForValue(s.y);
+    ctx.fillStyle = 'red';
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Tooltip content and position (placed just above the marker)
+    let trend = 'Stable';
+    if(s.slope > 0.01) trend = 'Rising';
+    else if(s.slope < -0.01) trend = 'Falling';
+    tooltip.style.display = 'block';
+    tooltip.innerHTML = `<strong>${s.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong><br>${s.y.toFixed(2)} m — ${trend}`;
+    // position relative to chart container
+    const rect = chart.canvas.getBoundingClientRect();
+    tooltip.style.left = (rect.left + x) + 'px';
+    tooltip.style.top = (rect.top + y - 38) + 'px';
   }
-});
-
-/* -------- Initialise with Today -------- */
-window.onload = () => {
-  const today = new Date().toISOString().split("T")[0];
-  document.getElementById("datePicker").value = today;
-  loadTidesForDate(today);
 };
-</script>
 
+// returns interpolated value & slope (m per hour) at given Date/time
+function sampleAt(time){
+  const timeMs = +new Date(time);
+  if(!dataPoints || dataPoints.length===0) return {x:new Date(timeMs), y:0, slope:0};
+  // binary search to find surrounding sample points
+  let lo=0, hi=dataPoints.length-1;
+  while(lo < hi){
+    const mid = Math.floor((lo+hi)/2);
+    if(+dataPoints[mid].x <= timeMs) lo = mid+1;
+    else hi = mid;
+  }
+  let idx = Math.max(1, lo);
+  if(idx >= dataPoints.length) idx = dataPoints.length-1;
+  const a = dataPoints[idx-1], b = dataPoints[idx];
+  const t0 = +a.x, t1 = +b.x;
+  const ratio = (timeMs - t0) / (t1 - t0 || 1);
+  const y = a.y + (b.y - a.y) * ratio;
+  // slope per hour
+  const slope = (b.y - a.y) / ((t1 - t0) / 3600000 || 1);
+  return {x: new Date(timeMs), y, slope};
+}
+
+// Chart initialisation
+const ctx = document.getElementById('tideChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    datasets: [{
+      label: 'Tide height (m)',
+      data: [], // filled later with dataPoints (sampled)
+      borderColor: '#007bff',
+      backgroundColor: 'rgba(0,123,255,0.15)',
+      tension: 0.25,
+      pointRadius: 0.5,
+      fill: true
+    }, {
+      label: 'High/Low',
+      data: [], // peaks (plotted as points)
+      pointRadius: 6,
+      showLine: false,
+      backgroundColor: [], // set per point (green/orange)
+      borderColor: []
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    scales: {
+      x: {
+        type: 'time',
+        time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+        title: { display: true, text: 'Time' }
+      },
+      y: {
+        title: { display: true, text: 'Height (m)' },
+        min: 0,
+        max: 2.5
+      }
+    },
+    plugins: { legend: { display: false }, tooltip: { enabled: false } }
+  },
+  plugins: [verticalLinePlugin]
+});
+
+/* ====== Interaction: drag vertical line ====== */
+const canvas = chart.canvas;
+function pixelToTime(px){ return chart.scales.x.getValueForPixel(px); }
+
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  markerTime = pixelToTime(e.offsetX);
+  chart.draw();
+});
+canvas.addEventListener('mousemove', e => {
+  if(isDragging){
+    markerTime = pixelToTime(e.offsetX);
+    chart.draw();
+  }
+});
+window.addEventListener('mouseup', e => {
+  if(isDragging){
+    isDragging = false;
+    // animate markerTime back to current time
+    const start = +markerTime;
+    const end = +new Date();
+    const t0 = performance.now();
+    function step(now){
+      const elapsed = now - t0;
+      const frac = Math.min(1, elapsed / 700);
+      const ease = 1 - Math.pow(1-frac, 2);
+      markerTime = new Date(start + (end - start) * ease);
+      chart.draw();
+      if(frac < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+});
+
+// keep marker synced to current time when not dragging
+setInterval(()=>{ if(!isDragging) { markerTime = new Date(); chart.draw(); } }, 30000);
+
+/* ============ Table toggle ============ */
+toggleBtn.addEventListener('click', ()=>{
+  if(tableContainer.style.display === 'none'){
+    tableContainer.style.display = 'block';
+    toggleBtn.textContent = 'Hide Tide Table ▲';
+  } else {
+    tableContainer.style.display = 'none';
+    toggleBtn.textContent = 'Show Tide Table ▼';
+  }
+});
+
+/* ============ CSV load and wiring ============ */
+
+async function loadAndInit(){
+  if(!CSV_RAW_URL || CSV_RAW_URL.includes('PASTE_RAW')) {
+    alert('Please set CSV_RAW_URL variable in the HTML to your GitHub raw CSV URL.');
+    return;
+  }
+  try {
+    const res = await fetch(CSV_RAW_URL);
+    if(!res.ok) throw new Error('Failed to fetch CSV: ' + res.status);
+    const txt = await res.text();
+    rawRows = parseCSV(txt);
+    buildDayMap(rawRows);
+    // set date selector to first available or today if present
+    const todayISO = new Date().toISOString().slice(0,10);
+    if(dayMap.has(todayISO)) dateSelector.value = todayISO;
+    else if(availableDates.length>0) dateSelector.value = availableDates[0];
+    else dateSelector.value = todayISO;
+    // initial render
+    renderForDate(dateSelector.value);
+  } catch(err){
+    console.error(err);
+    alert('Failed to load CSV. Check the raw URL and CORS permissions (raw.githubusercontent.com should be fine). See console for details.');
+  }
+}
+
+function renderForDate(dateISO){
+  // sample the day
+  dataPoints = sampleDay(dateISO, 15);
+  // detect peaks in sampled sequence
+  const peaks = detectHighLow(dataPoints);
+  // from peaks, only keep those that fall on the requested date (between 00:00 and 23:59)
+  const dayStart = +new Date(dateISO + 'T00:00:00');
+  const dayEnd = +new Date(dateISO + 'T23:59:59');
+  highLowPoints = peaks.filter(p => +p.x >= dayStart && +p.x <= dayEnd);
+
+  // update chart main dataset
+  chart.data.datasets[0].data = dataPoints.map(p => ({x: p.x, y: p.y}));
+
+  // update peaks dataset for visual markers
+  chart.data.datasets[1].data = highLowPoints.map(p => ({x:p.x, y:p.y}));
+  // set colours for peaks
+  chart.data.datasets[1].backgroundColor = highLowPoints.map(p => p.type === 'High' ? 'green' : 'orange');
+  chart.data.datasets[1].borderColor = highLowPoints.map(p => p.type === 'High' ? 'green' : 'orange');
+
+  // rebuild table showing ONLY High & Low for the day
+  tbody.innerHTML = '';
+  if(highLowPoints.length === 0){
+    tbody.innerHTML = `<tr><td colspan="3">No high/low points detected for this date</td></tr>`;
+  } else {
+    // sort by time
+    highLowPoints.sort((a,b)=> +a.x - +b.x);
+    highLowPoints.forEach(p=>{
+      const tr = document.createElement('tr');
+      const tdTime = document.createElement('td');
+      tdTime.textContent = p.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const tdH = document.createElement('td');
+      tdH.textContent = p.y.toFixed(2);
+      const tdType = document.createElement('td');
+      tdType.textContent = p.type;
+      tdType.className = p.type === 'High' ? 'high' : 'low';
+      tr.appendChild(tdTime); tr.appendChild(tdH); tr.appendChild(tdType);
+      tbody.appendChild(tr);
+    });
+  }
+
+  // set markerTime to current time (so it shows now initially)
+  markerTime = new Date();
+  chart.update();
+}
+
+// date picker change
+dateSelector.addEventListener('change', ()=>{
+  if(!dateSelector.value) return;
+  if(!dayMap.has(dateSelector.value)) {
+    // If chosen day not found in CSV, show message and attempt to still sample (will use neighbours if present)
+    console.warn('Selected date not in CSV, sampling algorithm will attempt interpolation using neighbouring days if available.');
+  }
+  renderForDate(dateSelector.value);
+});
+
+// initial load
+loadAndInit();
+
+</script>
 </body>
 </html>
