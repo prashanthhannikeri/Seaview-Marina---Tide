@@ -420,7 +420,7 @@ async function loadAndInit(){
     rawRows = parseCSV(txt);
     buildDayMap(rawRows);
     // set date selector to first available or today if present
-    const todayISO = new Date().toISOString().slice(0,10);
+    const todayISO = getLocalISODate();
     if(dayMap.has(todayISO)) dateSelector.value = todayISO;
     else if(availableDates.length>0) dateSelector.value = availableDates[0];
     else dateSelector.value = todayISO;
