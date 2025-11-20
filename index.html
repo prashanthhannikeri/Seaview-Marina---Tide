@@ -188,7 +188,7 @@ function buildKnownEventsForDate(dateISO){
 }
 
 // build sampled points every 'stepMins' minutes from midnight of dateISO to end of that day
-function sampleDay(dateISO, stepMins=15){
+function sampleDay(dateISO, stepMins=5){
   const events = buildKnownEventsForDate(dateISO);
   // If not enough events (e.g., missing prev/next), fill with duplication
   if(events.length < 2){
