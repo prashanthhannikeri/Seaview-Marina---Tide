@@ -188,49 +188,35 @@ function buildKnownEventsForDate(dateISO){
 }
 
 // build sampled points every 'stepMins' minutes from midnight of dateISO to end of that day
-function sampleDay(dateISO, stepMins=5){
+function sampleDay(dateISO, stepMins=5){ // smaller step for smoother curve
   const events = buildKnownEventsForDate(dateISO);
-  // If not enough events (e.g., missing prev/next), fill with duplication
-  if(events.length < 2){
-    // fallback: create two dummy events to avoid crash
-    const base = new Date(dateISO + 'T00:00:00');
-    events.length = 0;
-    events.push({t: new Date(+base), h:1.2});
-    events.push({t: new Date(+base + 12*3600*1000), h:1.6});
-    events.push({t: new Date(+base + 24*3600*1000), h:1.2});
-  }
+  if(events.length < 2) return [];
 
   const start = new Date(dateISO + 'T00:00:00');
   const end = new Date(dateISO + 'T23:59:59');
   const sampled = [];
+
   for(let ms = +start; ms <= +end; ms += stepMins*60*1000){
-    // find surrounding known events
+    // find nearest tide points before and after
     let prev = events[0], next = events[events.length-1];
     for(let i=0;i<events.length-1;i++){
       if(+events[i].t <= ms && ms <= +events[i+1].t){
-        prev = events[i];
-        next = events[i+1];
-        break;
-      }
-      if(ms < +events[0].t){
-        prev = {t: new Date(+events[0].t - 12*3600*1000), h: events[0].h};
-        next = events[0];
-        break;
-      }
-      if(ms > +events[events.length-1].t){
-        prev = events[events.length-1];
-        next = {t: new Date(+events[events.length-1].t + 12*3600*1000), h: events[events.length-1].h};
+        prev = events[i]; 
+        next = events[i+1]; 
         break;
       }
     }
-    // linear interpolation
     const t0 = +prev.t, t1 = +next.t;
-    const ratio = (ms - t0) / (t1 - t0 || 1);
-    const y = prev.h + (next.h - prev.h) * ratio;
-    sampled.push({x:new Date(ms), y: parseFloat(y.toFixed(3))});
+    const y0 = prev.h, y1 = next.h;
+
+    // Smooth sinusoidal approximation
+    const ratio = (ms - t0)/(t1 - t0 || 1);
+    const y = y0 + (y1 - y0)*(0.5 - 0.5*Math.cos(Math.PI*ratio)); // smooth curve
+    sampled.push({x:new Date(ms), y:parseFloat(y.toFixed(3))});
   }
   return sampled;
 }
+
 
 // detect local highs and lows in sampled data (simple neighbor compare)
 function detectHighLow(sampled){
