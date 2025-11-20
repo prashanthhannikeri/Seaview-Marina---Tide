@@ -515,9 +515,15 @@ dateSelector.addEventListener('change', ()=>{
 });
   const todayBtn = document.getElementById('todayBtn');
 todayBtn.addEventListener('click', () => {
-  const todayISO = getLocalISODate();
-  dateSelector.value = todayISO;
-  renderForDate(todayISO);
+ const now = new Date();
+const localTodayISO = now.getFullYear() + "-" +
+  String(now.getMonth() + 1).padStart(2, "0") + "-" +
+  String(now.getDate()).padStart(2, "0");
+
+if (dayMap.has(localTodayISO)) dateSelector.value = localTodayISO;
+else if (availableDates.length > 0) dateSelector.value = availableDates[0];
+else dateSelector.value = localTodayISO;
+
 });
 
 
