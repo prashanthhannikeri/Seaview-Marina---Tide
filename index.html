@@ -415,47 +415,74 @@ async function loadAndInit(){
 
 function renderForDate(dateISO){
   // sample the day
-  dataPoints = sampleDay(dateISO, 5);
-  // detect peaks in sampled sequence
-  const peaks = detectHighLow(dataPoints);
-  // from peaks, only keep those that fall on the requested date (between 00:00 and 23:59)
-  const dayStart = +new Date(dateISO + 'T00:00:00');
-  const dayEnd = +new Date(dateISO + 'T23:59:59');
-  highLowPoints = peaks.filter(p => +p.x >= dayStart && +p.x <= dayEnd);
+  // sample the day
+dataPoints = sampleDay(dateISO, 5);
 
-  // update chart main dataset
-  chart.data.datasets[0].data = dataPoints.map(p => ({x: p.x, y: p.y}));
+// include CSV tide points for peak detection
+const rawTides = dayMap.get(dateISO) || [];
+const peaksFromCSV = rawTides.map(p => ({
+  x: new Date(`${dateISO}T${p.time}`),
+  y: p.height,
+  type: null
+}));
 
-  // update peaks dataset for visual markers
-  chart.data.datasets[1].data = highLowPoints.map(p => ({x:p.x, y:p.y}));
-  // set colours for peaks
-  chart.data.datasets[1].backgroundColor = highLowPoints.map(p => p.type === 'High' ? 'green' : 'orange');
-  chart.data.datasets[1].borderColor = highLowPoints.map(p => p.type === 'High' ? 'green' : 'orange');
+// detect highs/lows in sampled data
+const sampledPeaks = detectHighLow(dataPoints);
 
-  // rebuild table showing ONLY High & Low for the day
-  tbody.innerHTML = '';
-  if(highLowPoints.length === 0){
-    tbody.innerHTML = `<tr><td colspan="3">No high/low points detected for this date</td></tr>`;
-  } else {
-    // sort by time
-    highLowPoints.sort((a,b)=> +a.x - +b.x);
-    highLowPoints.forEach(p=>{
-      const tr = document.createElement('tr');
-      const tdTime = document.createElement('td');
-      tdTime.textContent = p.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-      const tdH = document.createElement('td');
-      tdH.textContent = p.y.toFixed(2);
-      const tdType = document.createElement('td');
-      tdType.textContent = p.type;
-      tdType.className = p.type === 'High' ? 'high' : 'low';
-      tr.appendChild(tdTime); tr.appendChild(tdH); tr.appendChild(tdType);
-      tbody.appendChild(tr);
-    });
-  }
+// merge CSV points to ensure original highs/lows are included
+highLowPoints = [...sampledPeaks, ...peaksFromCSV];
 
-  // set markerTime to current time (so it shows now initially)
-  markerTime = new Date();
-  chart.update();
+// determine type (High/Low) using neighbour comparison on sampled points
+highLowPoints.forEach(p=>{
+  const neighbours = dataPoints.filter(dp => Math.abs(+dp.x - +p.x) <= 60*60*1000); // ±1hr
+  if(neighbours.length < 3) return;
+  const cur = p.y, prev = neighbours[0].y, next = neighbours[neighbours.length-1].y;
+  if(cur >= prev && cur >= next) p.type='High';
+  else if(cur <= prev && cur <= next) p.type='Low';
+  else p.type='Low'; // fallback
+});
+
+// keep only High/Low points
+highLowPoints = highLowPoints.filter(p => p.type==='High' || p.type==='Low');
+
+// update chart main dataset
+chart.data.datasets[0].data = dataPoints.map(p => ({x: p.x, y: p.y}));
+
+// update peaks dataset for visual markers
+chart.data.datasets[1].data = highLowPoints.map(p => {
+  // snap y to nearest sampled y
+  const nearest = dataPoints.reduce((a,b)=> Math.abs(+b.x - +p.x) < Math.abs(+a.x - +p.x)? b:a);
+  return {x:p.x, y:nearest.y};
+});
+
+// set colours for peaks
+chart.data.datasets[1].backgroundColor = highLowPoints.map(p => p.type === 'High' ? 'green' : 'orange');
+chart.data.datasets[1].borderColor = highLowPoints.map(p => p.type === 'High' ? 'green' : 'orange');
+
+// rebuild table showing High & Low
+tbody.innerHTML = '';
+if(highLowPoints.length === 0){
+  tbody.innerHTML = `<tr><td colspan="3">No high/low points detected for this date</td></tr>`;
+} else {
+  highLowPoints.sort((a,b)=> +a.x - +b.x);
+  highLowPoints.forEach(p=>{
+    const tr = document.createElement('tr');
+    const tdTime = document.createElement('td');
+    tdTime.textContent = p.x.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const tdH = document.createElement('td');
+    tdH.textContent = p.y.toFixed(2);
+    const tdType = document.createElement('td');
+    tdType.textContent = p.type;
+    tdType.className = p.type === 'High' ? 'high' : 'low';
+    tr.appendChild(tdTime); tr.appendChild(tdH); tr.appendChild(tdType);
+    tbody.appendChild(tr);
+  });
+}
+
+// set markerTime to current time (so it shows now initially)
+markerTime = new Date();
+chart.update();
+
 }
 
 // date picker change
