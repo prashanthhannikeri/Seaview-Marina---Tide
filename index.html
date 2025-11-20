@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <title>Seaview Marina — Tide Forecast</title>
+  
+<div id="logo-container">
+  <img src="https://github.com/prashanthhannikeri/Seaview-Marina---Tide/blob/main/MarinaLOGO.jpg" id="company-logo">
+</div>
 
+  
 <!-- Chart.js and date adapter -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -28,6 +33,18 @@
   #notice {
   display: none !important;
   #notice { max-width:980px; margin:6px auto; text-align:center; color:#666; font-size:13px; }
+
+#logo-container {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+
+#company-logo {
+  height: 60px;   /* adjust as needed */
+}
+
+    
 </style>
 </head>
 <body>
