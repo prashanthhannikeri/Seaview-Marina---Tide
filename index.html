@@ -515,7 +515,7 @@ dateSelector.addEventListener('change', ()=>{
 });
   const todayBtn = document.getElementById('todayBtn');
 todayBtn.addEventListener('click', () => {
-const todayISO = new Date().toISOString().slice(0,10); 
+const todayISO = getLocalISODate();
   dateSelector.value = todayISO; renderForDate(todayISO);
 });
 
