@@ -429,7 +429,7 @@ async function loadAndInit(){
 
 function renderForDate(dateISO){
   // sample the day
-  dataPoints = sampleDay(dateISO, 15);
+  dataPoints = sampleDay(dateISO, 5);
   // detect peaks in sampled sequence
   const peaks = detectHighLow(dataPoints);
   // from peaks, only keep those that fall on the requested date (between 00:00 and 23:59)
