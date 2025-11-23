@@ -400,94 +400,19 @@ const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
-// load cloud image
-const cloudImg = new Image();
-cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
-
-  // generate cloud positions once
-let cloudPositions = [];
-cloudImg.onload = () => {
-  const chartArea = chart.chartArea;
-  const cloudHeight = 50;
-  const cloudSpacing = 100;
-
-  // ensure chart is ready
-  if(!chartArea) {
-    setTimeout(() => cloudImg.onload(), 50); // try again shortly
-    return;
-  }
-
-  const left = chartArea.left;
-  const right = chartArea.right;
-  const top = chartArea.top;
-
-  cloudPositions = [];
-  for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
-    const y = top + 10 + Math.random() * 30; // clouds within chart, near top
-    cloudPositions.push({x, y});
-  }
-  chart.draw(); // redraw chart after image loads
-};
-  
-// plugin to draw sky + clouds above tide
-const skyPlugin = {
-  id: 'skyPlugin',
-  beforeDatasetsDraw(chart) {
-    const {ctx, chartArea} = chart;
-    if (!chartArea) return; // chart not ready yet
-    const {top, bottom, left, right} = chartArea;
-
-    // draw sky
-    ctx.save();
-    ctx.fillStyle = '#87CEEB'; // sky blue
-    ctx.fillRect(left, top, right-left, bottom-top);
-
-    // draw clouds
-    if (cloudImg.complete && cloudPositions.length > 0) {
-      const cloudHeight = 50;
-      for (let i = 0; i < cloudPositions.length; i++) {
-        const pos = cloudPositions[i];
-        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
-      }
-    }
-    ctx.restore();
-  }
-};
-
-// Once image loads, calculate positions just **once**
-cloudImg.onload = () => {
-  const chartArea = chart.chartArea;
-  if (!chartArea) {
-    setTimeout(() => cloudImg.onload(), 50); // retry if chart not ready
-    return;
-  }
-  const {left, right, top} = chartArea;
-  cloudPositions = [];
-  const cloudHeight = 50;
-  const cloudSpacing = 100;
-  let x = left;
-  while (x + cloudImg.width <= right) {
-    const y = top + 10 + Math.random() * 30;
-    cloudPositions.push({x, y});
-    x += cloudImg.width + cloudSpacing;
-  }
-  chart.draw(); // redraw now that clouds are ready
-};
-
-
-// create chart
+// 1. create the chart first
 const chart = new Chart(ctx, {
   type: 'line',
   data: {
     datasets: [{
       label: 'Tide height (m)',
-      data: [], // fill later with sampled points
+      data: [],
       borderColor: '#007bff',
       backgroundColor: waterGradient,
       tension: 0.5,
       pointRadius: 0.5,
       fill: true
-    },{
+    }, {
       label: 'High/Low',
       data: [],
       pointRadius: 6,
@@ -499,15 +424,65 @@ const chart = new Chart(ctx, {
   options: {
     responsive: true,
     maintainAspectRatio: false,
-    animation: false,
     scales: {
-      x: { type:'time', time:{ unit:'hour', displayFormats:{ hour:'HH:mm'}}, title:{display:true,text:'Time'} },
-      y: { title:{display:true,text:'Height (m)'}, min:0, max:2.5 }
+      x: { type:'time' },
+      y: { min:0, max:2.5 }
     },
-    plugins: { legend:{display:false}, tooltip:{enabled:false} }
+    plugins: { legend:{display:false} }
   },
-  plugins: [verticalLinePlugin, skyPlugin]
+  plugins: [verticalLinePlugin, skyPlugin] // plugin can be defined below
 });
+
+// 2. cloud image & positions
+const cloudImg = new Image();
+cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg';
+let cloudPositions = [];
+
+// plugin for sky + clouds
+const skyPlugin = {
+  id: 'skyPlugin',
+  beforeDatasetsDraw(chart) {
+    const {ctx, chartArea} = chart;
+    if (!chartArea || !cloudImg.complete || cloudPositions.length === 0) return;
+    const {top, bottom, left, right} = chartArea;
+
+    // draw sky
+    ctx.save();
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(left, top, right-left, bottom-top);
+
+    // draw clouds
+    const cloudHeight = 50;
+    for (const pos of cloudPositions) {
+      ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
+    }
+    ctx.restore();
+  }
+};
+
+// 3. calculate cloud positions AFTER chart exists and image loaded
+cloudImg.onload = () => {
+  function tryInit() {
+    const chartArea = chart.chartArea;
+    if (!chartArea) {
+      setTimeout(tryInit, 50);
+      return;
+    }
+    const {top, left, right} = chartArea;
+    const cloudHeight = 50;
+    const cloudSpacing = 100;
+    cloudPositions = [];
+    let x = left;
+    while (x + cloudImg.width <= right) {
+      const y = top + 10 + Math.random() * 30;
+      cloudPositions.push({x, y});
+      x += cloudImg.width + cloudSpacing;
+    }
+    chart.draw();
+  }
+  tryInit();
+};
+
 
 /* ====== Interaction: drag vertical line ====== */
 const canvas = chart.canvas;
