@@ -447,10 +447,12 @@ const skyPlugin = {
 
       // recalc positions each draw so they stay inside chart area
       cloudPositions = [];
-      for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
-        const y = top + 10 + Math.random() * 30;
-        cloudPositions.push({x, y});
-      }
+      let x = left;
+  while (x + cloudImg.width <= right) {  // <-- stop if cloud width exceeds right edge
+    const y = top + 10 + Math.random() * 30;
+    cloudPositions.push({x, y});
+    x += cloudImg.width + cloudSpacing;
+  }
 
       for (let i = 0; i < cloudPositions.length; i++) {
         const pos = cloudPositions[i];
