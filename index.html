@@ -401,9 +401,6 @@ waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
 // load cloud image
-//const cloudImg = new Image();
-//cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
-//cloudImg.onload = () => chart.draw(); // redraw chart once image loads
 const cloudImg = new Image();
 cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
 
@@ -446,13 +443,19 @@ const skyPlugin = {
     // draw clouds repeating across top
     if(cloudImg.complete){
       const cloudHeight = 50; // cloud vertical size
+      const cloudSpacing = 100;
+
+      // recalc positions each draw so they stay inside chart area
+      cloudPositions = [];
+      for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
+        const y = top + 10 + Math.random() * 30;
+        cloudPositions.push({x, y});
+      }
+
       for (let i = 0; i < cloudPositions.length; i++) {
         const pos = cloudPositions[i];
         ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
-      //const cloudSpacing = 100; // horizontal spacing
-     // for(let x = left; x < right; x += cloudImg.width + cloudSpacing){
-       //const y = top + Math.random()*50; // small vertical variation
-       //ctx.drawImage(cloudImg, x, y, cloudImg.width, cloudHeight);
+      
       }
     }
     ctx.restore();
