@@ -34,42 +34,53 @@
   display: none !important;
   }
 
-/* Default = Desktop layout */
+/* Desktop Layout */
 header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;   /* Logo left, text to the right */
-  gap: 15px;
-  margin-bottom: 10px;
+  justify-content: center;   /* Centre title */
+  position: relative;        /* Allow absolute-position logo */
+  margin-bottom: 15px;
+  text-align: center;
 }
 
+/* Logo positioned left */
 header img {
-  max-width: 140px;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 120px;
   height: auto;
 }
 
+/* Title styling */
 header h1 {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 2rem;
 }
 
-/* Mobile layout (≤ 600px) */
+/* MOBILE LAYOUT */
 @media (max-width: 600px) {
   header {
-    flex-direction: column;   /* Stack logo on top */
+    flex-direction: column;
     justify-content: center;
-    align-items: center;      /* Centre both elements */
-    text-align: centre;
+    align-items: center;
+    position: static;     /* Reset position */
   }
 
   header img {
-    max-width: 120px;  /* Slightly smaller for mobile */
+    position: static;     /* Move logo into normal flow */
+    transform: none;
+    margin-bottom: 10px;
+    max-width: 120px;
   }
 
   header h1 {
-    font-size: 1.4rem;
+    font-size: 1.6rem;
   }
 }
+
 
 
 
