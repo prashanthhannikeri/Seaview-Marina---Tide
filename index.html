@@ -432,37 +432,48 @@ cloudImg.onload = () => {
 // plugin to draw sky + clouds above tide
 const skyPlugin = {
   id: 'skyPlugin',
-  beforeDatasetsDraw(chart, args, options) {
-    const {ctx, chartArea: {top, bottom, left, right}} = chart;
+  beforeDatasetsDraw(chart) {
+    const {ctx, chartArea} = chart;
+    if (!chartArea) return; // chart not ready yet
+    const {top, bottom, left, right} = chartArea;
 
     // draw sky
     ctx.save();
     ctx.fillStyle = '#87CEEB'; // sky blue
     ctx.fillRect(left, top, right-left, bottom-top);
 
-    // draw clouds repeating across top
-    if(cloudImg.complete){
-      const cloudHeight = 50; // cloud vertical size
-      const cloudSpacing = 100;
-
-      // recalc positions each draw so they stay inside chart area
-      cloudPositions = [];
-      let x = left;
-  while (x + cloudImg.width <= right) {  // <-- stop if cloud width exceeds right edge
-    const y = top + 10 + Math.random() * 30;
-    cloudPositions.push({x, y});
-    x += cloudImg.width + cloudSpacing;
-  }
-
+    // draw clouds
+    if (cloudImg.complete && cloudPositions.length > 0) {
+      const cloudHeight = 50;
       for (let i = 0; i < cloudPositions.length; i++) {
         const pos = cloudPositions[i];
         ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
-      
       }
     }
     ctx.restore();
   }
 };
+
+// Once image loads, calculate positions just **once**
+cloudImg.onload = () => {
+  const chartArea = chart.chartArea;
+  if (!chartArea) {
+    setTimeout(() => cloudImg.onload(), 50); // retry if chart not ready
+    return;
+  }
+  const {left, right, top} = chartArea;
+  cloudPositions = [];
+  const cloudHeight = 50;
+  const cloudSpacing = 100;
+  let x = left;
+  while (x + cloudImg.width <= right) {
+    const y = top + 10 + Math.random() * 30;
+    cloudPositions.push({x, y});
+    x += cloudImg.width + cloudSpacing;
+  }
+  chart.draw(); // redraw now that clouds are ready
+};
+
 
 // create chart
 const chart = new Chart(ctx, {
