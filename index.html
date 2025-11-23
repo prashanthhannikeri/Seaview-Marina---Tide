@@ -404,7 +404,7 @@ waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 // plugin to draw sky + clouds above tide
 const skyPlugin = { 
   id: 'skyPlugin',
-  beforeDatasetsDraw(chart, args, options) {
+  beforeDatasetsDraw(chart) {
     const {ctx, chartArea: {top, bottom, left, right}} = chart;
 
     // draw sky
@@ -412,22 +412,13 @@ const skyPlugin = {
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(left, top, right-left, bottom-top);
 
-    // draw clouds if image loaded
-    if(cloudImg.complete){
-      const cloudHeight = 50; 
-      const cloudSpacing = 100;
-
-      // recalc positions each draw
-      cloudPositions = [];
-      for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
-        const y = top + 10 + Math.random() * 30;
-        cloudPositions.push({x, y});
-      }
-      for (let i = 0; i < cloudPositions.length; i++) {
-        const pos = cloudPositions[i];
-        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
-      }
+    // draw clouds only if positions exist
+    if(cloudPositions.length > 0){
+      cloudPositions.forEach(pos=>{
+        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, 50);
+      });
     }
+    ctx.restore();
   }
 };
 
@@ -479,27 +470,15 @@ cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Mar
 // generate cloud positions once
 let cloudPositions = [];
 cloudImg.onload = () => {
-const chartArea = chart.chartArea;
-const cloudHeight = 50;
-const cloudSpacing = 100;
-
-// ensure chart is ready 
-if(!chartArea) {
-setTimeout(() => cloudImg.onload(), 50); // try again shortly 
-return;
-}
-const left = chartArea.left;
-const right = chartArea.right;
-const top = chartArea.top;
+  const chartArea = chart.chartArea;
+  if(!chartArea) { setTimeout(() => cloudImg.onload(), 50); return; }
 
   cloudPositions = [];
-  for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
-    const y = top + 10 + Math.random() * 30; // clouds within chart, near top
-    cloudPositions.push({x, y});
+  for(let x = chartArea.left; x < chartArea.right; x += cloudImg.width + 100){
+    cloudPositions.push({x, y: chartArea.top + 10 + Math.random()*30});
   }
-  chart.draw(); // redraw chart after image loads
+  chart.draw();
 };
-
 
  
   
