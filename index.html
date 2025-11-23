@@ -400,7 +400,37 @@ const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
-// 1. create the chart first
+
+
+// 1. cloud image & positions
+const cloudImg = new Image();
+cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg';
+let cloudPositions = [];
+
+// plugin for sky + clouds
+const skyPlugin = {
+  id: 'skyPlugin',
+  beforeDatasetsDraw(chart) {
+    const {ctx, chartArea} = chart;
+    if (!chartArea ) return;
+    
+
+    // draw sky
+    ctx.save();
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+
+    // draw clouds
+    const cloudHeight = 50;
+    for (const pos of cloudPositions) {
+      ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
+    }
+  }
+    ctx.restore();
+  }
+};
+
+  // 2. create the chart first
 const chart = new Chart(ctx, {
   type: 'line',
   data: {
@@ -432,33 +462,6 @@ const chart = new Chart(ctx, {
   },
   plugins: [verticalLinePlugin, skyPlugin] // plugin can be defined below
 });
-
-// 2. cloud image & positions
-const cloudImg = new Image();
-cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg';
-let cloudPositions = [];
-
-// plugin for sky + clouds
-const skyPlugin = {
-  id: 'skyPlugin',
-  beforeDatasetsDraw(chart) {
-    const {ctx, chartArea} = chart;
-    if (!chartArea || !cloudImg.complete || cloudPositions.length === 0) return;
-    const {top, bottom, left, right} = chartArea;
-
-    // draw sky
-    ctx.save();
-    ctx.fillStyle = '#87CEEB';
-    ctx.fillRect(left, top, right-left, bottom-top);
-
-    // draw clouds
-    const cloudHeight = 50;
-    for (const pos of cloudPositions) {
-      ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
-    }
-    ctx.restore();
-  }
-};
 
 // 3. calculate cloud positions AFTER chart exists and image loaded
 cloudImg.onload = () => {
