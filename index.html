@@ -400,7 +400,43 @@ const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
-
+ // create chart
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+       label: 'Tide height (m)',
+       data: [], // fill later with sampled points
+       borderColor: '#007bff',
+       backgroundColor: waterGradient,
+       tension: 0.5,
+       pointRadius: 0.5,
+       fill: true
+      },
+      {
+      label: 'High/Low',
+        data: [],
+        pointRadius: 6,
+        showLine: false,
+        backgroundColor: [],
+        borderColor: []
+        }
+      ]
+        },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+      x: { type:'time', time:{ unit:'hour', displayFormats:{ hour:'HH:mm'}}, title:{display:true,text:'Time'} },
+      y: { title:{display:true,text:'Height (m)'}, min:0, max:2.5 } 
+      },
+      plugins: { legend:{display:false}, tooltip:{enabled:false} }        
+    },
+    plugins: [verticalLinePlugin, skyPlugin]
+  });
+  
 
 // 1. cloud image & positions
 const cloudImg = new Image();
@@ -461,38 +497,7 @@ beforeDatasetsDraw(chart, args, options) {
     }
   };
 
-  // create chart
-  const chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      datasets: [{
-       label: 'Tide height (m)',
-       data: [], // fill later with sampled points
-       borderColor: '#007bff',
-       backgroundColor: waterGradient,
-       tension: 0.5,
-       pointRadius: 0.5,
-       fill: true
-      },{
-      label: 'High/Low',
-        data: [],
-        pointRadius: 6,
-        showLine: false,
-        backgroundColor: [],
-        borderColor: []
-        }]
-        },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      scales: {
-      x: { type:'time', time:{ unit:'hour', displayFormats:{ hour:'HH:mm'}}, title:{display:true,text:'Time'} },
-      y: { title:{display:true,text:'Height (m)'}, min:0, max:2.5 } },
-      plugins: { legend:{display:false}, tooltip:{enabled:false} }        
-        },
-    plugins: [verticalLinePlugin, skyPlugin]
-      });
+ 
   
   
   
