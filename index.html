@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Seaview Marina — Tide Forecast</title>
   
 
@@ -398,6 +400,50 @@ canvas.addEventListener('mousemove', e => {
 window.addEventListener('mouseup', e => {
   if(isDragging){
     isDragging = false;
+    
+/* ===== Touch support for mobile devices ===== */
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = touch.clientX - rect.left;
+  isDragging = true;
+  markerTime = pixelToTime(x);
+  chart.draw();
+});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (isDragging) {
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    markerTime = pixelToTime(x);
+    chart.draw();
+  }
+});
+
+canvas.addEventListener('touchend', () => {
+  if (isDragging) {
+    isDragging = false;
+
+    // same animation as mouse release
+    const start = +markerTime;
+    const end = +new Date();
+    const t0 = performance.now();
+    function step(now){
+      const elapsed = now - t0;
+      const frac = Math.min(1, elapsed / 700);
+      const ease = 1 - Math.pow(1-frac, 2);
+      markerTime = new Date(start + (end - start) * ease);
+      chart.draw();
+      if(frac < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+});
+
+    
     // animate markerTime back to current time
     const start = +markerTime;
     const end = +new Date();
