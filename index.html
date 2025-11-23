@@ -394,6 +394,7 @@ function sampleAt(time){
 }
 
 // Chart initialisation
+const ctx = document.getElementById('tideChart').getContext('2d');  
 const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 gradient.addColorStop(0, 'rgba(135, 206, 235, 0.5)'); // sky color (top)
 gradient.addColorStop(0.4, 'rgba(135, 206, 235, 0.5)'); // sky stops just above water
