@@ -34,25 +34,36 @@
   display: none !important;
   }
 
-#logo-container {
-  position: absolute;
-  top: 10px;
-  left: 10px;
+header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
 
-#company-logo {
-  width: 120px;
-  height: auto;   /* adjust as needed */
+header img {
+  max-width: 140px;   /* Adjust size here */
+  width: 100%;
+  height: auto;
 }
+
+header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  text-align: center;
+}
+
 
     
 </style>
 </head>
 <body>
-  <div id="logo-container">
-  <img src="https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/MarinaLOGO.jpg" id="company-logo">
-</div>
+<header>
+  <img src="https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/MarinaLOGO.jpg" alt="Seaview Marina Logo">
   <h1>Seaview Marina Tide Forecast</h1>
+</header>
 
   <div id="controls">
     <input type="date" id="dateSelector" />
