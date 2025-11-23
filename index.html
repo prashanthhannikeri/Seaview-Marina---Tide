@@ -395,30 +395,58 @@ function sampleAt(time){
 
 // Chart initialisation
 const ctx = document.getElementById('tideChart').getContext('2d');  
-const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-gradient.addColorStop(0, 'rgba(135, 206, 235, 0.5)'); // sky color (top)
-gradient.addColorStop(0.4, 'rgba(135, 206, 235, 0.5)'); // sky stops just above water
-gradient.addColorStop(0.4, 'rgba(0, 123, 255, 0.3)'); // water starts
-gradient.addColorStop(1, 'rgba(0, 123, 255, 0.5)'); // water (bottom)
+// water gradient (under tide line)
+const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
+waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
-  //apply to chart dataset
+// load cloud image
+const cloudImg = new Image();
+cloudImg.src = 'https://i.ibb.co/7vG9tCF/cloud.png'; // small transparent cloud image
+cloudImg.onload = () => chart.draw(); // redraw chart once image loads
+
+// plugin to draw sky + clouds above tide
+const skyPlugin = {
+  id: 'skyPlugin',
+  beforeDatasetsDraw(chart, args, options) {
+    const {ctx, chartArea: {top, bottom, left, right}} = chart;
+
+    // draw sky
+    ctx.save();
+    ctx.fillStyle = '#87CEEB'; // sky blue
+    ctx.fillRect(left, top, right-left, bottom-top);
+
+    // draw clouds repeating across top
+    if(cloudImg.complete){
+      const cloudHeight = 50; // cloud vertical size
+      const cloudSpacing = 100; // horizontal spacing
+      for(let x = left; x < right; x += cloudImg.width + cloudSpacing){
+        const y = top + Math.random()*50; // small vertical variation
+        ctx.drawImage(cloudImg, x, y, cloudImg.width, cloudHeight);
+      }
+    }
+    ctx.restore();
+  }
+};
+
+// create chart
 const chart = new Chart(ctx, {
   type: 'line',
   data: {
     datasets: [{
       label: 'Tide height (m)',
-      data: [], // filled later with dataPoints (sampled)
+      data: [], // fill later with sampled points
       borderColor: '#007bff',
-      backgroundColor: gradient,
+      backgroundColor: waterGradient,
       tension: 0.5,
       pointRadius: 0.5,
       fill: true
-    }, {
+    },{
       label: 'High/Low',
-      data: [], // peaks (plotted as points)
+      data: [],
       pointRadius: 6,
       showLine: false,
-      backgroundColor: [], // set per point (green/orange)
+      backgroundColor: [],
       borderColor: []
     }]
   },
@@ -427,20 +455,12 @@ const chart = new Chart(ctx, {
     maintainAspectRatio: false,
     animation: false,
     scales: {
-      x: {
-        type: 'time',
-        time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
-        title: { display: true, text: 'Time' }
-      },
-      y: {
-        title: { display: true, text: 'Height (m)' },
-        min: 0,
-        max: 2.5
-      }
+      x: { type:'time', time:{ unit:'hour', displayFormats:{ hour:'HH:mm'}}, title:{display:true,text:'Time'} },
+      y: { title:{display:true,text:'Height (m)'}, min:0, max:2.5 }
     },
-    plugins: { legend: { display: false }, tooltip: { enabled: false } }
+    plugins: { legend:{display:false}, tooltip:{enabled:false} }
   },
-  plugins: [verticalLinePlugin]
+  plugins: [verticalLinePlugin, skyPlugin]
 });
 
 /* ====== Interaction: drag vertical line ====== */
