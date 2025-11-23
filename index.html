@@ -400,6 +400,38 @@ const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
+
+// plugin to draw sky + clouds above tide
+const skyPlugin = { 
+  id: 'skyPlugin',
+  beforeDatasetsDraw(chart, args, options) {
+    const {ctx, chartArea: {top, bottom, left, right}} = chart;
+
+    // draw sky
+    ctx.save();
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(left, top, right-left, bottom-top);
+
+    // draw clouds if image loaded
+    if(cloudImg.complete){
+      const cloudHeight = 50; 
+      const cloudSpacing = 100;
+
+      // recalc positions each draw
+      cloudPositions = [];
+      for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
+        const y = top + 10 + Math.random() * 30;
+        cloudPositions.push({x, y});
+      }
+      for (let i = 0; i < cloudPositions.length; i++) {
+        const pos = cloudPositions[i];
+        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
+      }
+    }
+  }
+};
+
+  
  // create chart
   const chart = new Chart(ctx, {
     type: 'line',
@@ -468,34 +500,6 @@ const top = chartArea.top;
   chart.draw(); // redraw chart after image loads
 };
 
-// plugin to draw sky + clouds above tide
- const skyPlugin = { 
-  id: 'skyPlugin',
-beforeDatasetsDraw(chart, args, options) {
-  const {ctx, chartArea: {top, bottom, left, right}} = chart;
-
-// draw sky
-  ctx.save();
-  ctx.fillStyle = '#87CEEB'; // sky blue
-  ctx.fillRect(left, top, right-left, bottom-top);
-
-// draw clouds repeating across top
-  if(cloudImg.complete){
-   const cloudHeight = 50; // cloud vertical size
-    const cloudSpacing = 100;
-
-// recalc positions each draw so they stay inside chart area
-    
-  cloudPositions = [];
-    for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
-      const y = top + 10 + Math.random() * 30;
-      cloudPositions.push({x, y});
-    }
-    for (let i = 0; i < cloudPositions.length; i++) {
-      const pos = cloudPositions[i];
-      ctx.drawImage(cloudImg, pos.x, pos.y,cloudImg.width, cloudHeight);
-    }
-  };
 
  
   
