@@ -401,10 +401,25 @@ waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
 // load cloud image
+//const cloudImg = new Image();
+//cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
+//cloudImg.onload = () => chart.draw(); // redraw chart once image loads
 const cloudImg = new Image();
 cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
-cloudImg.onload = () => chart.draw(); // redraw chart once image loads
 
+  // generate cloud positions once
+let cloudPositions = [];
+cloudImg.onload = () => {
+  const width = ctx.canvas.width;
+  const cloudHeight = 50;
+  const cloudSpacing = 100;
+  for (let x = 0; x < width; x += cloudImg.width + cloudSpacing) {
+    const y = 20 + Math.random() * 30; // initial random y, will stay fixed
+    cloudPositions.push({x, y});
+  }
+  chart.draw(); // redraw chart after image loads
+};
+  
 // plugin to draw sky + clouds above tide
 const skyPlugin = {
   id: 'skyPlugin',
@@ -419,10 +434,13 @@ const skyPlugin = {
     // draw clouds repeating across top
     if(cloudImg.complete){
       const cloudHeight = 50; // cloud vertical size
-      const cloudSpacing = 100; // horizontal spacing
-      for(let x = left; x < right; x += cloudImg.width + cloudSpacing){
-        const y = top + Math.random()*50; // small vertical variation
-        ctx.drawImage(cloudImg, x, y, cloudImg.width, cloudHeight);
+      for (let i = 0; i < cloudPositions.length; i++) {
+        const pos = cloudPositions[i];
+        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
+      //const cloudSpacing = 100; // horizontal spacing
+     // for(let x = left; x < right; x += cloudImg.width + cloudSpacing){
+       //const y = top + Math.random()*50; // small vertical variation
+       //ctx.drawImage(cloudImg, x, y, cloudImg.width, cloudHeight);
       }
     }
     ctx.restore();
