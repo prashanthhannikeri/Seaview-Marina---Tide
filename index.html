@@ -34,26 +34,43 @@
   display: none !important;
   }
 
+/* Default = Desktop layout */
 header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  justify-content: flex-start;   /* Logo left, text to the right */
+  gap: 15px;
   margin-bottom: 10px;
 }
 
 header img {
-  max-width: 140px;   /* Adjust size here */
-  width: 100%;
+  max-width: 140px;
   height: auto;
 }
 
 header h1 {
   margin: 0;
-  font-size: 1.6rem;
-  text-align: center;
+  font-size: 1.8rem;
 }
+
+/* Mobile layout (≤ 600px) */
+@media (max-width: 600px) {
+  header {
+    flex-direction: column;   /* Stack logo on top */
+    justify-content: center;
+    align-items: center;      /* Centre both elements */
+    text-align: centre;
+  }
+
+  header img {
+    max-width: 120px;  /* Slightly smaller for mobile */
+  }
+
+  header h1 {
+    font-size: 1.4rem;
+  }
+}
+
 
 
     
