@@ -410,11 +410,23 @@ cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Mar
   // generate cloud positions once
 let cloudPositions = [];
 cloudImg.onload = () => {
-  const width = ctx.canvas.width;
+  const chartArea = chart.chartArea;
   const cloudHeight = 50;
   const cloudSpacing = 100;
-  for (let x = 0; x < width; x += cloudImg.width + cloudSpacing) {
-    const y = 20 + Math.random() * 30; // initial random y, will stay fixed
+
+  // ensure chart is ready
+  if(!chartArea) {
+    setTimeout(() => cloudImg.onload(), 50); // try again shortly
+    return;
+  }
+
+  const left = chartArea.left;
+  const right = chartArea.right;
+  const top = chartArea.top;
+
+  cloudPositions = [];
+  for (let x = left; x < right; x += cloudImg.width + cloudSpacing) {
+    const y = top + 10 + Math.random() * 30; // clouds within chart, near top
     cloudPositions.push({x, y});
   }
   chart.draw(); // redraw chart after image loads
