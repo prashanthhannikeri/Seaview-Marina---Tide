@@ -430,6 +430,9 @@ const skyPlugin = {
     ctx.save();
     ctx.fillStyle = '#87CEEB'; //sky blue
     ctx.fillRect(left, top, right-left, bottom-top);
+      ctx.restore();
+  }
+};
 
     /*
     // draw clouds repeating across top
@@ -441,12 +444,7 @@ const skyPlugin = {
           }
         } */
     
-          ctx.restore();
-  }
-};
-*/
-
-  
+      
 
 
             
