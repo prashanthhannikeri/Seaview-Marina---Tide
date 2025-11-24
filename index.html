@@ -136,13 +136,7 @@ header h1 {
 const CSV_RAW_URL = "https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/tide_data.csv";
 /* ================================================================= */
 
-/*
-CSV format expected (exact column names not case-sensitive):
-Date,Time1,Tide1,Time2,Tide2,Time3,Tide3,Time4,Tide4
-Date values like 1/01/2025  or 01/01/2025
-Times like 0:17 or 06:36
-Tides numeric like 1.6
-*/
+
 
 document.getElementById('csvUrlDisplay').textContent = CSV_RAW_URL || '(set CSV_RAW_URL in the HTML)';
 
@@ -400,25 +394,7 @@ const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
-/*
-  // load cloud image 
-  const cloudImg = new Image(); 
-  cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
 
-// generate cloud positions once
-  let cloudPositions = [];
-  cloudImg.onload = () => {
-  const width = ctx.canvas.width;
-  //Const chartArea = chart.chartArea;
-  const cloudHeight = 50;  
-  const cloudSpacing = 100;
-    for (let x = 0; x < width; x += cloudImg.width + cloudSpacing) {
-      const y = 20 + Math.random() * 30; // initial random y, will stay fixed
-      cloudPositions.push({x, y});
-    }
-    chart.draw(); // redraw chart after image loads
-  };
-*/
    
 // plugin to draw sky + clouds above tide
 const skyPlugin = { 
@@ -434,23 +410,6 @@ const skyPlugin = {
   }
 };
 
-    /*
-    // draw clouds repeating across top
-        if(cloudImg.complete){
-          const cloudHeight = 50; // cloud vertical size 
-          for (let i = 0; i < cloudPositions.length; i++) {
-            const pos = cloudPositions[i];
-            ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
-          }
-        } */
-    
-      
-
-
-            
-
-
-    
    
 
   
