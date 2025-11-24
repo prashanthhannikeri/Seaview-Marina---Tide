@@ -401,26 +401,74 @@ waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
 
+// generate cloud positions once
+  let cloudPositions = [];
+  cloudImg.onload = () => {
+  Const chartArea = chart.chartArea;
+  const cloudHeight = 50;  
+  const cloudSpacing = 100;
+
+// ensure chart is ready
+    if(!chartArea) { 
+    setTimeout(() => cloudImg.onload(), 50); // try again shortly return;
+    }    
+    const left = chartArea.left; 
+    const right = chartArea.right; 
+    const top = chartArea.top;
+
+    cloudPositions = [];
+    for (let x = left; x < right; x += cloudImg.width + cloudSpacing) { 
+    const y = top + 10 + Math.random() * 30; // clouds within chart, near top 
+    cloudPositions.push({x, y}); 
+    } 
+    chart.draw(); // redraw chart after image loads 
+  };
+    
+
+    
+
+
+
+    
+  
 // plugin to draw sky + clouds above tide
 const skyPlugin = { 
   id: 'skyPlugin',
-  beforeDatasetsDraw(chart) {
+  beforeDatasetsDraw(chart, args, options) {
     const {ctx, chartArea: {top, bottom, left, right}} = chart;
 
     // draw sky
     ctx.save();
-    ctx.fillStyle = '#87CEEB';
+    ctx.fillStyle = '#87CEEB'; //sky blue
     ctx.fillRect(left, top, right-left, bottom-top);
 
-    // draw clouds only if positions exist
-    if(cloudPositions.length > 0){
-      cloudPositions.forEach(pos=>{
-        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, 50);
-      });
-    }
-    ctx.restore();
+    // draw clouds repeating across top
+        if(cloudImg.complete){
+          const cloudHeight = 50; // cloud vertical size 
+          const cloudSpacing = 100;
+
+// recalc positions each draw so they stay inside chart area 
+      cloudPositions = []; 
+        for (let x = left; x < right; x += cloudImg.width + cloudSpacing) { 
+          const y = top + 10 + Math.random() * 30; 
+          cloudPositions.push({x, y}); 
+        }
+
+      for (let i = 0; i < cloudPositions.length; i++) { 
+        const pos = cloudPositions[i]; 
+        ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
+      }
+     }
+        ctx.restore();
   }
 };
+
+
+            
+
+
+    
+   
 
   
  // create chart
@@ -453,37 +501,14 @@ const skyPlugin = {
       animation: false,
       scales: {
       x: { type:'time', time:{ unit:'hour', displayFormats:{ hour:'HH:mm'}}, title:{display:true,text:'Time'} },
-      y: { title:{display:true,text:'Height (m)'}, 
+      y: { title:{display:true,text:'Height (m)'}, min:0, max:2.5}
       },
       plugins: { legend:{display:false}, tooltip:{enabled:false} }        
     },
     plugins: [verticalLinePlugin, skyPlugin]
   });
   
-
-// 1. cloud image & positions
-const cloudImg = new Image();
-cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg';
-//let cloudPositions = [];
-
-
-// generate cloud positions once
-let cloudPositions = [];
-cloudImg.onload = () => {
-  const chartArea = chart.chartArea;
-  if(!chartArea) { setTimeout(() => cloudImg.onload(), 50); return; }
-
-  cloudPositions = [];
-  for(let x = chartArea.left; x < chartArea.right; x += cloudImg.width + 100){
-    cloudPositions.push({x, y: chartArea.top + 10 + Math.random()*30});
-  }
-  chart.draw();
-};
-
  
-  
-  
-  
   
   
 
