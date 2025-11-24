@@ -400,6 +400,9 @@ const waterGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
 waterGradient.addColorStop(0, 'rgba(0,123,255,0.3)');
 waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
 
+  // load cloud image 
+  const cloudImg = new Image(); 
+  cloudImg.src = 'https://raw.githubusercontent.com/prashanthhannikeri/Seaview-Marina---Tide/refs/heads/main/Cloud.jpg'; // small transparent cloud image
 
 // generate cloud positions once
   let cloudPositions = [];
