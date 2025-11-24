@@ -418,7 +418,7 @@ waterGradient.addColorStop(1, 'rgba(0,123,255,0.5)');
     }
     chart.draw(); // redraw chart after image loads
   };
-
+*/
    
 // plugin to draw sky + clouds above tide
 const skyPlugin = { 
@@ -431,6 +431,7 @@ const skyPlugin = {
     ctx.fillStyle = '#87CEEB'; //sky blue
     ctx.fillRect(left, top, right-left, bottom-top);
 
+    /*
     // draw clouds repeating across top
         if(cloudImg.complete){
           const cloudHeight = 50; // cloud vertical size 
@@ -438,7 +439,8 @@ const skyPlugin = {
             const pos = cloudPositions[i];
             ctx.drawImage(cloudImg, pos.x, pos.y, cloudImg.width, cloudHeight);
           }
-        }
+        } */
+    
           ctx.restore();
   }
 };
